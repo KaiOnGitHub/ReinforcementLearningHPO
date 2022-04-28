@@ -1,5 +1,7 @@
 from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.env_util import make_atari_env
+from stable_baselines3.common.vec_env import VecFrameStack
 
 
 import os
@@ -66,18 +68,17 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         return True
 
 
-def run_ppo(learning_rate: float, gamma: float, eps: float, environment: str = 'CartPole-v1'):
+def run_ppo(learning_rate: float, gamma: float, eps: float, environment: str = 'Pong-v0'):
     seed = 67890
     # Create log dir
     log_dir = "tmp_DQN_%s_%s_%s_%s/" % (environment, learning_rate, gamma, eps)
     os.makedirs(log_dir, exist_ok=True)
 
     # Create and wrap the environment
-    env = gym.make(environment)
-    env = Monitor(env, log_dir)
+    env = make_atari_env(environment, n_envs=1, seed=seed, monitor_dir=log_dir)
+    env = VecFrameStack(env, n_stack=4)    
 
-    # Because we use parameter noise, we should use a MlpPolicy with layer normalization
-    model = DQN('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
+    model = DQN('CnnPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
                 exploration_fraction=1, exploration_initial_eps=eps, exploration_final_eps=eps, seed=seed)
     # Create the callback: check every 1000 steps
     callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, seed=seed)
