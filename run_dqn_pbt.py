@@ -1,3 +1,4 @@
+from typing import Dict
 from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_atari_env
@@ -9,7 +10,8 @@ import os
 import gym
 import numpy as np
 import json
-
+import math
+from ray import tune
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
@@ -65,7 +67,11 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         return True
 
 
-def run_dqn(learning_rate: float, gamma: float, eps: float, environment: str = 'Pong-v0'):
+def run_dqn(config: Dict, environment: str = 'Pong-v0'):
+    learning_rate = config.get("lr").sample()
+    gamma = config.get("gammas").sample()
+    eps = config.get("epsilons").sample()
+    
     seed = 67890
     # Create log dir
     log_dir = "tmp_DQN_%s_%s_%s_%s/" % (environment, learning_rate, gamma, eps)
@@ -73,7 +79,7 @@ def run_dqn(learning_rate: float, gamma: float, eps: float, environment: str = '
 
     # Create and wrap the environment
     env = make_atari_env(environment, n_envs=1, seed=seed, monitor_dir=log_dir)
-    env = VecFrameStack(env, n_stack=4)    
+    env = VecFrameStack(env, n_stack=1)
 
     model = DQN('CnnPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
                 exploration_fraction=1, exploration_initial_eps=eps, exploration_final_eps=eps, seed=seed)
@@ -100,9 +106,16 @@ n_configs = 100
 seed = 67890
 #Set numpy random seed
 np.random.seed(seed)
+
 learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))
 gammas = np.random.uniform(low=0.8, high=1, size=n_configs)
 epsilons = np.random.uniform(low=0.05, high=0.3, size=n_configs)
 
-for lr, gamma, eps in zip(learning_rates, gammas, epsilons):
-    r, std_r = run_dqn(learning_rate=lr, gamma=gamma, eps=eps)
+# use tune for hyperparameter selection
+search_space = {
+    "lr": tune.uniform(lower=math.pow(10, -6), upper=math.pow(10, -2)),
+    "gammas": tune.uniform(lower=0.8, upper=1.0),
+    "epsilons": tune.uniform(0.05, 0.3)
+}
+
+r, std_r = run_dqn(config=search_space)
