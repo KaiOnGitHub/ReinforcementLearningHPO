@@ -30,6 +30,7 @@ def run_dqn(config: Dict, checkpoint_dir=None):
 
     model = DQN('CnnPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
                 exploration_fraction=1, exploration_initial_eps=eps, exploration_final_eps=eps, seed=seed)
+    model.current_step = 0
     rewards = []
     std_rewards = []
 
@@ -38,21 +39,22 @@ def run_dqn(config: Dict, checkpoint_dir=None):
         print("Loading from checkpoint.")
         path = os.path.join(checkpoint_dir, "checkpoint")
         model = DQN.load(path, env)
-        # TODO: We should probably load the timestep from the checkpoint when training was stopped and resume there.
 
     # Train the agent
     timesteps = int(1e6/1e4)
-    for i in range(timesteps):
+    for i in range(model.current_step, timesteps):
         model.learn(total_timesteps=int(10e3))
         # Returns average and standard deviation of the return from the evaluation
         r, std_r = evaluate_policy(model=model, env=env)
         rewards.append(r)
         std_rewards.append(std_r)
 
+        # TODO: Is it fine if we just use mean_reward here? What about std_rewards?
         mean_reward = np.mean(rewards[-100:])
 
         with tune.checkpoint_dir(i) as checkpoint_dir:
                 path = os.path.join(checkpoint_dir, "checkpoint")
+                model.current_step = i
                 model.save(path)
 
         # TODO: Report a mean or best result
@@ -122,6 +124,19 @@ analysis = tune.run(
     )
 
 print("Best hyperparameters found were: ", analysis.best_config)
+
+# Plot by wall-clock time
+dfs = analysis.fetch_trial_dataframes()
+# This plots everything on the same plot
+ax = None
+for d in dfs.values():
+    ax = d.plot("training_iteration", "mean_reward", ax=ax, legend=False)
+
+import matplotlib.pyplot as plt
+
+plt.xlabel("iterations")
+plt.ylabel("mean_reward")
+plt.show()
 
 
 # best_trial = analysis.best_trial  # Get best trial
