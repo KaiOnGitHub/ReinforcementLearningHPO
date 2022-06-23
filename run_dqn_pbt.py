@@ -1,3 +1,4 @@
+from turtle import end_fill
 from typing import Dict
 from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -7,11 +8,25 @@ import gym
 import numpy as np
 import math
 import ray
+import time
 from ray import tune
 from ray.tune.schedulers import PopulationBasedTraining
+from ray.tune import Stopper
+import argparse
+
+class TimeStopper(Stopper):
+    def __init__(self):
+        self._start = time.time()
+        self._deadline = 60*60*6 # 6 hours
+
+    def __call__(self, trial_id, result):
+        return False
+
+    def stop_all(self):
+        return time.time() - self._start > self._deadline
 
 def run_dqn(config: Dict, checkpoint_dir=None):
-    environment = 'Acrobot-v1'
+    environment = config.get("environment")
     learning_rate = config.get("lr")
     gamma = config.get("gammas")
     eps = config.get("epsilons")
@@ -22,10 +37,12 @@ def run_dqn(config: Dict, checkpoint_dir=None):
 
     # Create and wrap the environment
     env = gym.make(environment)
+    env = Monitor(env)
 
     model = DQN('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
                 exploration_fraction=1, exploration_initial_eps=eps, exploration_final_eps=eps)
    
+
     # TODO: Use Stopper class
 
     # If checkpoint_dir is not None, then we are resuming from a checkpoint.
@@ -39,7 +56,7 @@ def run_dqn(config: Dict, checkpoint_dir=None):
     timesteps = int(2e6/1e4)
     rewards = []
     for i in range(timesteps):
-        total_timesteps = int(10e5)
+        total_timesteps = int(10e4)
         model.learn(total_timesteps)
         # Returns average and standard deviation of the return from the evaluation
         r, std_r = evaluate_policy(model=model, env=env)
@@ -49,11 +66,21 @@ def run_dqn(config: Dict, checkpoint_dir=None):
 
         with tune.checkpoint_dir(i) as checkpoint_dir:
             path = os.path.join(checkpoint_dir, "checkpoint")
+            # TODO save model total timesteps and episodes total here
             model.save(path)
 
-        # TODO: Does it make sense to report total_timesteps and episode_num? Seems to be always None at the start of the iteration / when loading the checkpoint.
-        tune.report(mean_reward=mean_reward, timesteps_total=model._total_timesteps, episodes_total=model._episode_num)
+        tune.report(mean_reward=mean_reward)
 
+parser = argparse.ArgumentParser("python run_dqn_pbt.py")
+parser.add_argument("environment", help="The gym environment as string", type=str)
+args = parser.parse_args()
+
+if args.environment:
+    environment = args.environment
+else:
+    environment = 'Acrobot-v1'
+
+print("ENV: "+ environment)
 
 scheduler = PopulationBasedTraining(
         time_attr="training_iteration",
@@ -66,7 +93,8 @@ scheduler = PopulationBasedTraining(
     )
 
 # use tune for hyperparameter selection
-search_space = {
+config = {
+    "environment": environment,
     "lr": tune.uniform(lower=math.pow(10, -6), upper=math.pow(10, -2)),
     "gammas": tune.uniform(lower=0.8, upper=1.0),
     "epsilons": tune.uniform(0.05, 0.3)
@@ -75,6 +103,7 @@ search_space = {
 # set `address=None` to train on laptop
 ray.init(address=None)
 
+print("dqn-pbt-tune_"+environment)
 # use local_mode to run in one process (enables debugging in IDE)
 # ray.init(address=None,local_mode=True)
 
@@ -83,16 +112,17 @@ sync_config = tune.SyncConfig()
 
 analysis = tune.run(
     run_dqn,
-    name="dqn-pbt-tune",
+    name="dqn-pbt-tune_"+environment,
     scheduler=scheduler,
     verbose=False,
     metric="mean_reward",
     mode="max",
     num_samples=4,
+    stop=TimeStopper(),
 
     # a directory where results are stored before being
     # sync'd to head node/cloud storage
-    local_dir="tmp/pbtTune",
+    local_dir=os.path.dirname(os.path.realpath(__file__))+'/../tmp',
 
     # sync our checkpoints via rsync
     # you don't have to pass an empty sync config - but we
@@ -108,7 +138,7 @@ analysis = tune.run(
     # sync_config (if one exists), otherwise it will start a new tuning run
     resume="AUTO",
     
-    config=search_space,
+    config=config,
     )
 
 print("Best hyperparameters found were: ", analysis.best_config)
@@ -122,21 +152,21 @@ ax = None
 df1, df2, df3, df4 = dfs.values()
 
 best_rewards = []
-latest_time = []
+time_trained = []
 
 for i, (d1, d2, d3, d4) in enumerate(zip(df1.values, df2.values, df3.values, df4.values)):
     best_rewards.append(max(d1[0], d2[0], d3[0], d4[0]))
-    latest_time.append(max(d1[11], d2[11], d3[11], d4[11]))
+    time_trained.append(sum([d1[11], d2[11], d3[11], d4[11]]))
 
 # ax = df1.plot("training_iteration", best_rewards, ax=ax, legend=False)
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-plt.plot(latest_time, best_rewards)
+# plt.plot(time_trained, best_rewards)
 
-plt.xlabel("time in seconds")
-plt.ylabel("mean_reward")
-plt.show()
+# plt.xlabel("time in seconds")
+# plt.ylabel("mean_reward")
+# plt.show()
 
 
 # best_trial = analysis.best_trial  # Get best trial
