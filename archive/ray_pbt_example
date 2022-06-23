@@ -1,0 +1,43 @@
+# https://docs.ray.io/en/latest/tune/tutorials/tune-advanced-tutorial.html
+
+def train_convnet(config, checkpoint_dir=None):
+    # Create our data loaders, model, and optmizer.
+    step = 0
+    train_loader, test_loader = get_data_loaders()
+    model = ConvNet()
+    optimizer = optim.SGD(
+        model.parameters(),
+        lr=config.get("lr", 0.01),
+        momentum=config.get("momentum", 0.9),
+    )
+
+    # If checkpoint_dir is not None, then we are resuming from a checkpoint.
+    # Load model state and iteration step from checkpoint.
+    if checkpoint_dir:
+        print("Loading from checkpoint.")
+        path = os.path.join(checkpoint_dir, "checkpoint")
+        checkpoint = torch.load(path)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        step = checkpoint["step"]
+
+    while True:
+        train(model, optimizer, train_loader)
+        acc = test(model, test_loader)
+        if step % 5 == 0:
+            # Every 5 steps, checkpoint our current state.
+            # First get the checkpoint directory from tune.
+            with tune.checkpoint_dir(step=step) as checkpoint_dir:
+                # Then create a checkpoint file in this directory.
+                path = os.path.join(checkpoint_dir, "checkpoint")
+                # Save state to checkpoint file.
+                # No need to save optimizer for SGD.
+                torch.save(
+                    {
+                        "step": step,
+                        "model_state_dict": model.state_dict(),
+                        "mean_accuracy": acc,
+                    },
+                    path,
+                )
+        step += 1
+        tune.report(mean_accuracy=acc)
