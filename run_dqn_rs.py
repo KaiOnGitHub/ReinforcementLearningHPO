@@ -1,14 +1,13 @@
 from stable_baselines3 import DQN
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.env_util import make_atari_env
-from stable_baselines3.common.vec_env import VecFrameStack
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.results_plotter import load_results, ts2xy
-from stable_baselines3.common.callbacks import BaseCallback
 import os
 import gym
 import numpy as np
 import json
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.results_plotter import load_results, ts2xy
+from stable_baselines3.common.callbacks import BaseCallback
+import argparse
 
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
@@ -65,20 +64,57 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         return True
 
 
-def run_dqn(learning_rate: float, gamma: float, eps: float, environment: str = 'Pong-v0'):
+def run_ppo(learning_rate: float, gamma: float, eps: float, environment: str):
     seed = 67890
-    # Create log dir
-    log_dir = "tmp_DQN_%s_%s_%s_%s/" % (environment, learning_rate, gamma, eps)
-    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create directories
+    working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/dqn-rs_%s/%s_%s_%s/' % (environment, learning_rate, gamma, eps)
+    monitor_dir = working_dir+"monitor"
+    eval_dir = working_dir+"evaluation"
+
+    os.makedirs(working_dir, exist_ok=True)
+    os.makedirs(monitor_dir, exist_ok=True)
+    os.makedirs(eval_dir, exist_ok=True)
 
     # Create and wrap the environment
-    env = make_atari_env(environment, n_envs=1, seed=seed, monitor_dir=log_dir)
-    env = VecFrameStack(env, n_stack=4)    
+    env = gym.make(environment)
+    env = Monitor(env, monitor_dir)
 
-    model = DQN('CnnPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
-                exploration_fraction=1, exploration_initial_eps=eps, exploration_final_eps=eps, seed=seed)
+    if (environment == 'MountainCar-v0'):
+        optimal_env_params = dict(
+            batch_size=128,
+            buffer_size=10000,
+            learning_starts=1000,
+            target_update_interval=600,
+            train_freq=16,
+            gradient_steps=8,
+            policy_kwargs=dict(net_arch=[256, 256])
+        )
+    elif (environment == 'CartPole-v1'):
+        optimal_env_params = dict(
+            batch_size=64,
+            buffer_size=100000,
+            learning_starts=1000,
+            target_update_interval=10,
+            train_freq=256,
+            gradient_steps=128,
+            policy_kwargs=dict(net_arch=[256, 256]))
+    elif (environment == 'Acrobot-v1'):
+        optimal_env_params = dict(
+            batch_size=128,
+            buffer_size=50000,
+            learning_starts=0,
+            target_update_interval=250,
+            train_freq=4,
+            gradient_steps=-1,
+            policy_kwargs=dict(net_arch=[256, 256])
+        )
+
+    # Because we use parameter noise, we should use a MlpPolicy with layer normalization
+    model = DQN('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
+                exploration_fraction=1, exploration_initial_eps=eps, exploration_final_eps=eps, seed=seed, **optimal_env_params)
     # Create the callback: check every 1000 steps
-    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, seed=seed)
+    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=monitor_dir, seed=seed)
     rewards = []
     std_rewards = []
     # Train the agent
@@ -91,12 +127,23 @@ def run_dqn(learning_rate: float, gamma: float, eps: float, environment: str = '
         std_rewards.append(std_r)
     data = {"gamma": gamma, "learning_rate": learning_rate, "epsilon": eps,
                          "rewards": rewards, "std_rewards": std_rewards}
-    with open("%s_DQN_random_lr_%s_gamma_%s_clip_%s_seed%s_eval.json" % (environment, learning_rate, gamma, eps, seed),
+    with open("%s/%s_DQN_random_lr_%s_gamma_%s_clip_%s_seed%s_eval.json" % (eval_dir, environment, learning_rate, gamma, eps, seed),
               'w+') as f:
         json.dump(data, f)
     return rewards, std_rewards
 
-n_configs = 100
+parser = argparse.ArgumentParser("python run_dqn_rs.py")
+parser.add_argument("environment", help="The gym environment as string", type=str)
+args = parser.parse_args()
+
+if args.environment:
+    environment = args.environment
+else:
+    environment = 'Acrobot-v1'
+
+print("ENV: "+ environment)
+
+n_configs = 15
 seed = 67890
 #Set numpy random seed
 np.random.seed(seed)
@@ -105,4 +152,4 @@ gammas = np.random.uniform(low=0.8, high=1, size=n_configs)
 epsilons = np.random.uniform(low=0.05, high=0.3, size=n_configs)
 
 for lr, gamma, eps in zip(learning_rates, gammas, epsilons):
-    r, std_r = run_dqn(learning_rate=lr, gamma=gamma, eps=eps)
+    r, std_r = run_ppo(learning_rate=lr, gamma=gamma, eps=eps, environment=environment)

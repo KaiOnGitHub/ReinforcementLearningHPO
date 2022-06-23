@@ -1,15 +1,14 @@
 from stable_baselines3 import A2C
 from stable_baselines3.common.evaluation import evaluate_policy
-
-
 import os
-
 import gym
 import numpy as np
 import json
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.env_util import make_vec_env
+import argparse
 
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
@@ -66,20 +65,34 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
         return True
 
 
-def run_ppo(learning_rate: float, gamma: float, environment: str = 'CartPole-v1'):
+def run_a2c(learning_rate: float, gamma: float, environment: str):
     seed = 67890
-    # Create log dir
-    log_dir = "tmp_A2C_%s_%s_%s/" % (environment, learning_rate, gamma)
-    os.makedirs(log_dir, exist_ok=True)
+
+    # Create directories
+    working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/a2c-rs_%s/%s_%s/' % (environment, learning_rate, gamma)
+    monitor_dir = working_dir+"monitor"
+    eval_dir = working_dir+"evaluation"
+
+    os.makedirs(working_dir, exist_ok=True)
+    os.makedirs(monitor_dir, exist_ok=True)
+    os.makedirs(eval_dir, exist_ok=True)
 
     # Create and wrap the environment
+    env = make_vec_env(environment, n_envs=16)
     env = gym.make(environment)
-    env = Monitor(env, log_dir)
+    env = Monitor(env, monitor_dir)
 
     # Because we use parameter noise, we should use a MlpPolicy with layer normalization
-    model = A2C('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=seed)
+
+
+    # For Acrobot, Mountaincar and CartPole the same
+    optimal_env_params = dict(
+        ent_coef=.0
+    )
+
+    model = A2C('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=seed, **optimal_env_params)
     # Create the callback: check every 1000 steps
-    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, seed=seed)
+    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=monitor_dir, seed=seed)
     rewards = []
     std_rewards = []
     # Train the agent
@@ -91,12 +104,23 @@ def run_ppo(learning_rate: float, gamma: float, environment: str = 'CartPole-v1'
         rewards.append(r)
         std_rewards.append(std_r)
     data = {"gamma": gamma, "learning_rate": learning_rate, "rewards": rewards, "std_rewards": std_rewards}
-    with open("%s_A2C_random_lr_%s_gamma_%s_seed%s_eval.json" % (environment, learning_rate, gamma, seed),
+    with open("%s/%s_A2C_random_lr_%s_gamma_%s_seed%s_eval.json" % (eval_dir, environment, learning_rate, gamma, seed),
               'w+') as f:
         json.dump(data, f)
     return rewards, std_rewards
 
-n_configs = 100
+n_configs = 15
+parser = argparse.ArgumentParser("python run_dqn_rs.py")
+parser.add_argument("environment", help="The gym environment as string", type=str)
+args = parser.parse_args()
+
+if args.environment:
+    environment = args.environment
+else:
+    environment = 'Acrobot-v1'
+
+print("ENV: "+ environment)
+
 seed = 67890
 #Set numpy random seed
 np.random.seed(seed)
@@ -104,4 +128,4 @@ learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs)
 gammas = np.random.uniform(low=0.8, high=1, size=n_configs)
 
 for lr, gamma in zip(learning_rates, gammas):
-    r, std_r = run_ppo(learning_rate=lr, gamma=gamma)
+    r, std_r = run_a2c(learning_rate=lr, gamma=gamma, environment=environment)
