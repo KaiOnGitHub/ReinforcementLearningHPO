@@ -116,7 +116,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
 
 
-def run_dqn(config: dict, environment: str = 'MountainCar-v0', policy: str = 'MlpPolicy'
+def run_dqn(config: dict, environment: str = 'Acrobot-v1', policy: str = 'MlpPolicy'
             , budget: int = 1, seed: int = 1):
     learning_rate = config["learning_rate"]
     gamma = config["gamma"]
@@ -143,18 +143,18 @@ def run_dqn(config: dict, environment: str = 'MountainCar-v0', policy: str = 'Ml
         env = Monitor(env, log_dir)
         # Because we use parameter noise, we should use a MlpPolicy with layer normalization
 
-        if (environment == 'MountainCar-v0'):
+        if (environment == 'Acrobot-v1'):
             optimal_env_params = dict(
-                batch_size=128,
-                buffer_size=10000,
-                learning_starts=1000,
-                target_update_interval=600,
-                train_freq=16,
-                gradient_steps=8,
-                policy_kwargs=dict(net_arch=[256, 256])
+            batch_size=128,
+            buffer_size=50000,
+            learning_starts=0,
+            target_update_interval=250,
+            train_freq=4,
+            gradient_steps=-1,
+            policy_kwargs=dict(net_arch=[256, 256])
         )
 
-        model = DQN(policy, env, verbose=0, learning_rate=np.power(10, learning_rate), gamma=gamma,
+        model = DQN(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma,
                     exploration_final_eps=clip, exploration_initial_eps=clip,
                     exploration_fraction=1, seed=seed, **optimal_env_params)
         rewards = []

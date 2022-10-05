@@ -154,7 +154,7 @@ def run_dqn(config: dict, environment: str = 'MountainCar-v0', policy: str = 'Ml
                 policy_kwargs=dict(net_arch=[256, 256])
         )
 
-        model = DQN(policy, env, verbose=0, learning_rate=np.power(10, learning_rate), gamma=gamma,
+        model = DQN(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma,
                     exploration_final_eps=clip, exploration_initial_eps=clip,
                     exploration_fraction=1, seed=seed, **optimal_env_params)
         rewards = []

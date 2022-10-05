@@ -15,7 +15,7 @@ from ConfigSpace.hyperparameters import (
 
 import gym
 
-from stable_baselines3 import DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 
 
@@ -116,23 +116,23 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
 
 
-def run_dqn(config: dict, environment: str = 'MountainCar-v0', policy: str = 'MlpPolicy'
+def run_ppo(config: dict, environment: str = 'MountainCar-v0', policy: str = 'MlpPolicy'
             , budget: int = 1, seed: int = 1):
     learning_rate = config["learning_rate"]
     gamma = config["gamma"]
     clip = config["clip"]
     # Create log dir if it doesn't exist
-    log_dir = "SMAC4MF_tmp_DQN_%s_%s_%s_%s_%s/" % (environment, learning_rate, gamma, clip, seed)
+    log_dir = "SMAC4MF_tmp_PPO_%s_%s_%s_%s_%s/" % (environment, learning_rate, gamma, clip, seed)
 
     if os.path.exists(log_dir):
         # Create and wrap the environment
         env = gym.make(environment)
         env = Monitor(env, log_dir)
-        model = DQN.load(path=os.path.join(log_dir, "checkpoint"), env=env)
+        model = PPO.load(path=os.path.join(log_dir, "checkpoint"), env=env)
         # model.gamma = gamma
         # model.learning_rate = learning_rate
         # model.clip_range = clip
-        with open(os.path.join(log_dir, "%s_DQN_random_lr_%s_gamma_%s_eps_%s_seed%s_eval.json" % (environment, learning_rate, gamma, clip, seed)), 'r') as f:
+        with open(os.path.join(log_dir, "%s_PPO_random_lr_%s_gamma_%s_eps_%s_seed%s_eval.json" % (environment, learning_rate, gamma, clip, seed)), 'r') as f:
             data = json.load(f)
         rewards = data["rewards"]
         std_rewards = data["std_rewards"]
@@ -143,20 +143,34 @@ def run_dqn(config: dict, environment: str = 'MountainCar-v0', policy: str = 'Ml
         env = Monitor(env, log_dir)
         # Because we use parameter noise, we should use a MlpPolicy with layer normalization
 
+
         if (environment == 'MountainCar-v0'):
             optimal_env_params = dict(
+                n_steps=16,
+                gae_lambda=0.98,
+                n_epochs=4,
+                ent_coef=0.0,
+            )
+        elif (environment == 'CartPole-v1'):
+            optimal_env_params = dict(
+                n_steps=32,
+                batch_size=256,
+                gae_lambda=0.8,
+                n_epochs=20,
+                ent_coef=0.0,
+            )
+        elif (environment == 'Acrobot-v1'):
+            optimal_env_params = dict(
+                n_steps=256,
                 batch_size=128,
-                buffer_size=10000,
-                learning_starts=1000,
-                target_update_interval=600,
-                train_freq=16,
-                gradient_steps=8,
-                policy_kwargs=dict(net_arch=[256, 256])
-        )
+                gae_lambda=0.94,
+                n_epochs=4,
+                ent_coef=0.0,
+            )
 
-        model = DQN(policy, env, verbose=0, learning_rate=np.power(10, learning_rate), gamma=gamma,
-                    exploration_final_eps=clip, exploration_initial_eps=clip,
-                    exploration_fraction=1, seed=seed, **optimal_env_params)
+        model = PPO(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma,
+                clip_range=clip, seed=seed, **optimal_env_params)
+
         rewards = []
         std_rewards = []
     # Create the callback: check every 1000 steps
@@ -172,7 +186,7 @@ def run_dqn(config: dict, environment: str = 'MountainCar-v0', policy: str = 'Ml
             std_rewards.append(std_r)
     data = {"gamma": gamma, "learning_rate": learning_rate, "epsilon": clip,
                          "rewards": rewards, "std_rewards": std_rewards}
-    with open(os.path.join(log_dir,  "%s_DQN_random_lr_%s_gamma_%s_eps_%s_seed%s_eval.json" % (environment, learning_rate, gamma, clip, seed)),
+    with open(os.path.join(log_dir,  "%s_PPO_random_lr_%s_gamma_%s_eps_%s_seed%s_eval.json" % (environment, learning_rate, gamma, clip, seed)),
               'w+') as f:
         json.dump(data, f)
     path = os.path.join(log_dir, "checkpoint")
@@ -232,7 +246,7 @@ if __name__ == "__main__":
     smac = SMAC4MF(
         scenario=scenario,
         rng=np.random.RandomState(SEED),
-        tae_runner=run_dqn,
+        tae_runner=run_ppo,
         intensifier_kwargs=intensifier_kwargs,
     )
 
