@@ -1,3 +1,6 @@
+from cmath import isnan
+from math import nan
+import math
 from re import M, search
 from time import time
 from unittest import result
@@ -36,14 +39,10 @@ fig, ax = plt.subplots()
 fig.suptitle(model)
 
 # set limit of x axis depending on the time trained in seconds which is different for the algorithms
-if algorithm in ['a2c', 'ppo']:
-    if search_method == 'pbt':
-        xlimit = 10000
-    else: 
-        xlimit = 600
-elif algorithm == 'dqn':
-    ax.set_xticks([1000, 2000, 3000])
+if search_method == 'pbt':
     xlimit = 3000
+else:
+    xlimit = 600
 
 # set y axis depending on the model (negative / positive rewards)
 if 'CartPole-v1' in model:
@@ -111,7 +110,7 @@ for subdir, dirs, files in os.walk(model_directory + model):
                     row_num += 1
 
             
-            # for rs we could determine the best model by looking at the graph
+            # for rs we could also determine the best model by looking at the graph
             best_configs = [
                 ["a2c-rs_CartPole-v1", "0.002364653701144912_0.9472172939982206"],
                 ["a2c-rs_Acrobot-v1", "2.389750676286248e-05_0.9244750203730072"],
@@ -130,13 +129,27 @@ for subdir, dirs, files in os.walk(model_directory + model):
                     
                     # if config is not None and config.startswith('0.0061'):
                     #    print(config)
-
             data_to_be_plotted.append([time_trained, mean_rewards, config])
                     
 for m in data_to_be_plotted:
     # we only want to plot the best model
-    # if best_model_mean_reward == np.mean(m[1]):
-        plt.plot(m[0], m[1], label=m[2])
+    plot_best_model_only = False
+
+    if plot_best_model_only: 
+        if best_model_mean_reward == np.mean(m[1]):
+            # extend graph at beginning of x-axis with value at x=0
+            m[0].insert(0,0)
+            m[1].insert(0,m[1][0])
+            
+            plt.plot(m[0], m[1], label=m[2])
+            break
+    else:
+        # w/o labels
+        if search_method == 'sma':
+            # exit()
+            pass
+        plt.plot(m[0], m[1])
+
 
 plt.legend(loc='best')
 plt.xlabel("time in seconds")
