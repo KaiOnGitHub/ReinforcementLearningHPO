@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 import math
 
@@ -39,7 +40,7 @@ from smac.scenario.scenario import Scenario
 __copyright__ = "Copyright 2021, AutoML.org Freiburg-Hannover"
 __license__ = "3-clause BSD"
 
-SEED = int(sys.argv[1])
+SEED = int(datetime.now().timestamp())
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
@@ -122,7 +123,7 @@ def run_a2c(config: dict, environment: str = 'Acrobot-v1', policy: str = 'MlpPol
     gamma = config["gamma"]
     clip = config["clip"]
     # Create log dir if it doesn't exist
-    log_dir = "SMAC4MF_tmp_A2C_%s_%s_%s_%s_%s/" % (environment, learning_rate, gamma, clip, seed)
+    log_dir = "a2c-smac_%s/%s_%s_%s_%s/" % (environment, learning_rate, gamma, clip, seed)
 
     if os.path.exists(log_dir):
         # Create and wrap the environment
@@ -152,7 +153,7 @@ def run_a2c(config: dict, environment: str = 'Acrobot-v1', policy: str = 'MlpPol
     # Create the callback: check every 1000 steps
     # callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, seed=seed)
     # Train the agent
-    timesteps = budget - len(rewards)
+    timesteps = 10
     if len(rewards) < budget:
         for i in range(int(timesteps)):
             model.learn(total_timesteps=int(1e4), callback=None)
@@ -200,7 +201,7 @@ if __name__ == "__main__":
     scenario = Scenario(
         {
             "run_obj": "quality",  # we optimize quality (alternative to runtime)
-            "runcount-limit": 100,  # max duration to run the optimization (in seconds)
+            "runcount-limit": 10, # number of configurations
             "cs": cs,  # configuration space
             "deterministic": True,
             # Uses pynisher to limit memory and runtime
@@ -213,7 +214,7 @@ if __name__ == "__main__":
     )
 
     # Max budget for hyperband can be anything. Here, we set it to maximum no. of epochs to train the MLP for
-    max_epochs = 2e6
+    max_epochs = 1e5
 
     # Intensifier parameters
     intensifier_kwargs = {"initial_budget": 1e4, "max_budget": max_epochs, "eta": 5}

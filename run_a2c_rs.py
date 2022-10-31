@@ -1,3 +1,4 @@
+from datetime import datetime
 from stable_baselines3 import A2C
 from stable_baselines3.common.evaluation import evaluate_policy
 import os
@@ -96,7 +97,7 @@ def run_a2c(learning_rate: float, gamma: float, environment: str):
     rewards = []
     std_rewards = []
     # Train the agent
-    timesteps = int(2e6/1e4)
+    timesteps = 10
     for i in range(timesteps):
         model.learn(total_timesteps=int(1e4), callback=callback)
         # Returns average and standard deviation of the return from the evaluation
@@ -109,7 +110,7 @@ def run_a2c(learning_rate: float, gamma: float, environment: str):
         json.dump(data, f)
     return rewards, std_rewards
 
-n_configs = 15
+n_configs = 10
 parser = argparse.ArgumentParser("python run_dqn_rs.py")
 parser.add_argument("environment", help="The gym environment as string", type=str)
 args = parser.parse_args()
@@ -121,7 +122,7 @@ else:
 
 print("ENV: "+ environment)
 
-seed = 67890
+seed = int(datetime.now().timestamp())
 #Set numpy random seed
 np.random.seed(seed)
 learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))

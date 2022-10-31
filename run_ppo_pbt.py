@@ -1,3 +1,4 @@
+from datetime import datetime
 from turtle import end_fill
 from typing import Dict
 from stable_baselines3 import PPO
@@ -32,7 +33,7 @@ def run_ppo(config: Dict, checkpoint_dir=None):
     clip = config.get("clips")
     optimal_env_params = config.get("optimal_env_params")
 
-    seed = 67890
+    seed = int(datetime.now().timestamp())
     #Set numpy random seed
     np.random.seed(seed)
 
@@ -51,10 +52,10 @@ def run_ppo(config: Dict, checkpoint_dir=None):
 
 
     # Train the agent
-    timesteps = int(2e6/1e4)
+    timesteps = 10
     rewards = []
     for i in range(timesteps):
-        total_timesteps = int(10e4)
+        total_timesteps = int(1e4)
         model.learn(total_timesteps)
         # Returns average and standard deviation of the return from the evaluation
         r, std_r = evaluate_policy(model=model, env=env)
@@ -139,7 +140,7 @@ analysis = tune.run(
     verbose=False,
     metric="mean_reward",
     mode="max",
-    num_samples=8,
+    num_samples=2,
     stop=TimeStopper(),
 
     # a directory where results are stored before being
@@ -164,36 +165,3 @@ analysis = tune.run(
     )
 
 print("Best hyperparameters found were: ", analysis.best_config)
-
-# Plot by wall-clock time
-dfs = analysis.fetch_trial_dataframes()
-
-# This plots everything on the same plot
-ax = None
-
-df1, df2, df3, df4 = dfs.values()
-
-best_rewards = []
-time_trained = []
-
-for i, (d1, d2, d3, d4) in enumerate(zip(df1.values, df2.values, df3.values, df4.values)):
-    best_rewards.append(max(d1[0], d2[0], d3[0], d4[0]))
-    time_trained.append(sum([d1[11], d2[11], d3[11], d4[11]]))
-
-# ax = df1.plot("training_iteration", best_rewards, ax=ax, legend=False)
-
-# import matplotlib.pyplot as plt
-
-# plt.plot(time_trained, best_rewards)
-
-# plt.xlabel("time in seconds")
-# plt.ylabel("mean_reward")
-# plt.show()
-
-
-# best_trial = analysis.best_trial  # Get best trial
-# best_config = analysis.best_config  # Get best trial's hyperparameters
-# best_logdir = analysis.best_logdir  # Get best trial's logdir
-# best_checkpoint = analysis.best_checkpoint  # Get best trial's best checkpoint
-# best_result = analysis.best_result  # Get best trial's last results
-# best_result_df = analysis.best_result_df  # Get best result as pandas dataframe

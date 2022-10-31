@@ -1,4 +1,6 @@
+from calendar import c
 from cmath import isnan
+from enum import Enum
 from math import nan
 import math
 from re import M, search
@@ -33,6 +35,10 @@ config = None
 best_model_mean_reward = -1000
 data_to_be_plotted = []
 
+class PlotingOptions(Enum):
+    PLOT_BEST_MODEL_ONLY = False
+    SMOOTHEN_PLOT = True
+
 # plot everything on the same plot
 ax = None
 fig, ax = plt.subplots()
@@ -40,9 +46,9 @@ fig.suptitle(model)
 
 # set limit of x axis depending on the time trained in seconds which is different for the algorithms
 if search_method == 'pbt':
-    xlimit = 3000
+    xlimit = 100
 else:
-    xlimit = 600
+    xlimit = 100
 
 # set y axis depending on the model (negative / positive rewards)
 if 'CartPole-v1' in model:
@@ -92,62 +98,39 @@ for subdir, dirs, files in os.walk(model_directory + model):
                         if model_mean_reward_evaluation > best_model_mean_reward:
                             best_model_mean_reward = model_mean_reward_evaluation
                         break
-
-                    # we smoothen the plot depending on the amount of data
-                    if file == 'progress.csv':
-                        chunk_size = 2
-                    elif file == 'monitor.csv':
-                        chunk_size = 50
-
-                    if (row_num % chunk_size == 0):
-                        mean_reward = np.mean(mean_reward_chunk)
-                        mean_rewards.append(mean_reward)
-                        mean_reward_chunk = []
-                        time_trained.append(round(float(time_elapsed), 2))
-                    else:
-                        mean_reward_chunk.append(float(reward))
                 
-                    row_num += 1
+                    if PlotingOptions.SMOOTHEN_PLOT.value:
+                        # we smoothen the plot depending on the amount of data
+                        if file == 'progress.csv':
+                            chunk_size = 2
+                        elif file == 'monitor.csv':
+                            chunk_size = 50
 
-            
-            # for rs we could also determine the best model by looking at the graph
-            best_configs = [
-                ["a2c-rs_CartPole-v1", "0.002364653701144912_0.9472172939982206"],
-                ["a2c-rs_Acrobot-v1", "2.389750676286248e-05_0.9244750203730072"],
-                ["a2c-rs_MountainCar-v0", "0.0011058210654566563_0.8256825040860226"],
-                ["dqn-rs_Acrobot-v1", "0.0061080332185138855_0.9992974101720703_0.1502436913690241"],
-                ["dqn-rs_CartPole-v1", False],
-                ["dqn-rs_MountainCar-v0", False],
-                ["ppo-rs_CartPole-v1", "0.0011058210654566563_0.8256825040860226_0.1925974651791333"],
-                ["ppo-rs_Acrobot-v1", "0.0061080332185138855_0.9992974101720703_0.1502436913690241"],
-                ["ppo-rs_MountainCar-v0", "0.0061080332185138855_0.9992974101720703_0.1502436913690241"],
-            ]
-            
-            # if search_method == 'rs_':
-                # if any(config == x and model == arr[0] for arr in best_configs for x in arr):
-                    # plt.plot(time_trained, mean_rewards, label=config)
+                        if (row_num % chunk_size == 0):
+                            mean_reward = np.mean(mean_reward_chunk)
+                            mean_rewards.append(mean_reward)
+                            mean_reward_chunk = []
+                            time_trained.append(round(float(time_elapsed), 2))
+                        else:
+                            mean_reward_chunk.append(float(reward))
+                    else:
+                        mean_rewards.append(float(reward))
+                        time_trained.append(round(float(time_elapsed), 2))
                     
-                    # if config is not None and config.startswith('0.0061'):
-                    #    print(config)
+                    row_num += 1
             data_to_be_plotted.append([time_trained, mean_rewards, config])
                     
 for m in data_to_be_plotted:
-    # we only want to plot the best model
-    plot_best_model_only = False
-
-    if plot_best_model_only: 
-        if best_model_mean_reward == np.mean(m[1]):
-            # extend graph at beginning of x-axis with value at x=0
-            m[0].insert(0,0)
-            m[1].insert(0,m[1][0])
-            
+    # extend graph at beginning of x-axis with value at x=0
+    m[0].insert(0,0)
+    m[1].insert(0,m[1][0])
+    print(m)
+    
+    if PlotingOptions.PLOT_BEST_MODEL_ONLY.value:
+        if best_model_mean_reward == np.mean(m[1]):    
             plt.plot(m[0], m[1], label=m[2])
             break
     else:
-        # w/o labels
-        if search_method == 'sma':
-            # exit()
-            pass
         plt.plot(m[0], m[1])
 
 
@@ -155,4 +138,4 @@ plt.legend(loc='best')
 plt.xlabel("time in seconds")
 plt.ylabel("mean reward")
 plt.savefig(model+'.jpg')
-# plt.show()
+#plt.show()

@@ -1,3 +1,4 @@
+from datetime import datetime
 import gym
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -116,7 +117,7 @@ def run_ppo(learning_rate: float, gamma: float, clip: float, environment: str):
     rewards = []
     std_rewards = []
     # Train the agent
-    timesteps = int(2e6/1e4)
+    timesteps = 10
     for i in range(timesteps):
         model.learn(total_timesteps=int(1e4), callback=callback)
         # Returns average and standard deviation of the return from the evaluation
@@ -141,10 +142,9 @@ else:
 
 print("ENV: "+ environment)
 
-n_configs = 15
-seed = 67890
+n_configs = 10
 #Set numpy random seed
-np.random.seed(seed)
+np.random.seed(int(datetime.now().timestamp()))
 learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))
 gammas = np.random.uniform(low=0.8, high=1, size=n_configs)
 clips = np.random.uniform(low=0.05, high=0.3, size=n_configs)
