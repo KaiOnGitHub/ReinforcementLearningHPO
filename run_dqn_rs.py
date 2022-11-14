@@ -145,7 +145,7 @@ else:
 print("ENV: "+ environment)
 
 n_configs = 10
-seed = int(datetime.now().timestamp())
+seed = 42
 #Set numpy random seed
 np.random.seed(seed)
 learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))

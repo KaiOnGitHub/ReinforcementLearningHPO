@@ -8,9 +8,11 @@ from time import time
 from unittest import result
 import matplotlib.pyplot as plt
 import csv
+import json
 import os
 import numpy as np
 import argparse
+import re
 
 # default model, if no model is passed as argument
 model = 'dqn-rs_Acrobot-v1'
@@ -36,106 +38,77 @@ best_model_mean_reward = -1000
 data_to_be_plotted = []
 
 class PlotingOptions(Enum):
-    PLOT_BEST_MODEL_ONLY = False
-    SMOOTHEN_PLOT = True
+    PLOT_BEST_MODEL_ONLY = True
 
 # plot everything on the same plot
 ax = None
 fig, ax = plt.subplots()
 fig.suptitle(model)
 
-# set limit of x axis depending on the time trained in seconds which is different for the algorithms
-if search_method == 'pbt':
-    xlimit = 100
-else:
-    xlimit = 100
+
+xlimit = 10
 
 # set y axis depending on the model (negative / positive rewards)
 if 'CartPole-v1' in model:
-    ax.axis([0, xlimit, 0, 600])
+    ax.axis([1, xlimit, 0, 600])
 elif 'Acrobot-v1' in model:
-    ax.axis([0, xlimit, 0, -600])
+    ax.axis([1, xlimit, 0, -600])
 elif 'MountainCar-v0' in model:
-    ax.axis([0, xlimit, 0, -250])
+    ax.axis([1, xlimit, 0, -250])
 
 # walk through all trained model directories and plot the results of the one passed as argument
 for subdir, dirs, files in os.walk(model_directory + model):
     for file in files:
-        if file in ['monitor.csv', 'progress.csv']:
-            mean_rewards = []
-            time_trained = []
-            time_elapsed = 0
-            mean_reward_chunk = []
+        pattern = re.compile(r".*eval\.json")
+
+        if file in ['result.json'] or pattern.match(file):
+            rewards = []
 
             file_path = os.path.join(subdir, file)
-
-            # Only in random search do we have fixed parameters throughout the training of the model
-            if search_method == 'rs_':
-                config = file_path.split('/')[9]
-
-            with open(file_path, newline='') as csvfile:
-                resultreader = csv.reader(csvfile, delimiter=',')
-
-                row_num = 1
-                for row in resultreader:
-
-                    # skip the heading of the csv
-                    if len(row) < 3 or row[0] in ['r', 'mean_reward']:
-                        continue
-
-                    reward = float(row[0])
-                    episode_length = float(row[1])
-                    
-                    if (file == 'monitor.csv'):    
-                        time_elapsed = float(row[2])
-                    elif (file == 'progress.csv'):
-                        time_this_iter = float(row[1])
-                        time_elapsed += time_this_iter
-
-                    # stop reading csv when xlimit is reached and choose the best model via best mean reward across training
-                    if time_elapsed > xlimit:
-                        model_mean_reward_evaluation = np.mean(mean_rewards)
-                        if model_mean_reward_evaluation > best_model_mean_reward:
-                            best_model_mean_reward = model_mean_reward_evaluation
-                        break
+            with open(file_path) as file:
+                lines = file.readlines()
+                lineCount = len(lines)
                 
-                    if PlotingOptions.SMOOTHEN_PLOT.value:
-                        # we smoothen the plot depending on the amount of data
-                        if file == 'progress.csv':
-                            chunk_size = 2
-                        elif file == 'monitor.csv':
-                            chunk_size = 50
+                for line in lines:
+                    row = json.loads(line)
 
-                        if (row_num % chunk_size == 0):
-                            mean_reward = np.mean(mean_reward_chunk)
-                            mean_rewards.append(mean_reward)
-                            mean_reward_chunk = []
-                            time_trained.append(round(float(time_elapsed), 2))
-                        else:
-                            mean_reward_chunk.append(float(reward))
-                    else:
-                        mean_rewards.append(float(reward))
-                        time_trained.append(round(float(time_elapsed), 2))
+                    if "mean_reward" in row: # PBT
+                        rewards.append(row["mean_reward"])    
+                    else: # SMAC and RS
+                        for reward in row["rewards"]:
+                            rewards.append(reward)
+                        break
+            
+            if len(rewards) < xlimit and PlotingOptions.PLOT_BEST_MODEL_ONLY.value:
+                # skip trajectories that are too short
+                continue
+
+            model_mean_reward = np.mean(rewards)
+
+            if model_mean_reward > best_model_mean_reward:
+                best_model_mean_reward = model_mean_reward
                     
-                    row_num += 1
-            data_to_be_plotted.append([time_trained, mean_rewards, config])
+            data_to_be_plotted.append(rewards)
                     
-for m in data_to_be_plotted:
-    # extend graph at beginning of x-axis with value at x=0
-    m[0].insert(0,0)
-    m[1].insert(0,m[1][0])
-    print(m)
-    
+
+for rewards in data_to_be_plotted:
+    iterations = []
+
+    for i in range(len(rewards)):
+        iterations.append(i+1)
+
     if PlotingOptions.PLOT_BEST_MODEL_ONLY.value:
-        if best_model_mean_reward == np.mean(m[1]):    
-            plt.plot(m[0], m[1], label=m[2])
+        if best_model_mean_reward == np.mean(rewards):    
+            plt.plot(iterations, rewards)
             break
     else:
-        plt.plot(m[0], m[1])
+        plt.plot(iterations, rewards)
+
 
 
 plt.legend(loc='best')
-plt.xlabel("time in seconds")
+plt.xlabel("training iteration")
 plt.ylabel("mean reward")
 plt.savefig(model+'.jpg')
-#plt.show()
+
+# plt.show()

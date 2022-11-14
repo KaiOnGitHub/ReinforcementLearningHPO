@@ -83,7 +83,6 @@ def run_ppo(learning_rate: float, gamma: float, clip: float, environment: str):
     os.makedirs(eval_dir, exist_ok=True)
 
     # Create and wrap the environment
-    env = make_vec_env(environment, n_envs=8)
     env = gym.make(environment)
     env = Monitor(env, monitor_dir)
 
@@ -144,7 +143,7 @@ print("ENV: "+ environment)
 
 n_configs = 10
 #Set numpy random seed
-np.random.seed(int(datetime.now().timestamp()))
+np.random.seed(42)
 learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))
 gammas = np.random.uniform(low=0.8, high=1, size=n_configs)
 clips = np.random.uniform(low=0.05, high=0.3, size=n_configs)

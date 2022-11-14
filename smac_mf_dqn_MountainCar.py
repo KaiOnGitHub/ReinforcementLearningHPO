@@ -41,7 +41,7 @@ from smac.scenario.scenario import Scenario
 __copyright__ = "Copyright 2021, AutoML.org Freiburg-Hannover"
 __license__ = "3-clause BSD"
 
-SEED = int(datetime.now().timestamp())
+SEED = 42
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
@@ -163,7 +163,7 @@ def run_dqn(config: dict, environment: str = 'MountainCar-v0', policy: str = 'Ml
     # Create the callback: check every 1000 steps
     # callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, seed=seed)
     # Train the agent
-    timesteps = 10
+    timesteps = budget - len(rewards)
     if len(rewards) < budget:
         for i in range(int(timesteps)):
             model.learn(total_timesteps=int(1e4), callback=None)
@@ -224,10 +224,10 @@ if __name__ == "__main__":
     )
 
     # Max budget for hyperband can be anything. Here, we set it to maximum no. of epochs to train the MLP for
-    max_epochs = 1e5
+    max_iterations = 10
 
     # Intensifier parameters
-    intensifier_kwargs = {"initial_budget": 1e4, "max_budget": max_epochs, "eta": 5}
+    intensifier_kwargs = {"initial_budget": 1, "max_budget": max_iterations, "eta": 5}
     # seed = int(sys.argv[1])
     # To optimize, we pass the function to the SMAC-object
     smac = SMAC4MF(
@@ -241,12 +241,12 @@ if __name__ == "__main__":
 
     # Example call of the function with default values
     # It returns: Status, Cost, Runtime, Additional Infos
-    def_value = tae.run(
-        config=cs.get_default_configuration(),
-        budget=max_epochs, seed=12345
-    )[1]
+    # def_value = tae.run(
+        # config=cs.get_default_configuration(),
+        # budget=max_iterations, seed=12345
+#    )[1]
 
-    print("Value for default configuration: %.4f" % def_value)
+    #print("Value for default configuration: %.4f" % def_value)
 
     # Start optimization
     try:
@@ -254,6 +254,6 @@ if __name__ == "__main__":
     finally:
         incumbent = smac.solver.incumbent
 
-    inc_value = tae.run(config=incumbent, budget=max_epochs, seed=12345)[1]
+    inc_value = tae.run(config=incumbent, budget=max_iterations, seed=12345)[1]
     print("Value for inc configuration: %.4f" % inc_value)
 

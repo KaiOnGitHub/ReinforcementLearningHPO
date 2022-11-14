@@ -22,7 +22,7 @@ def run_a2c(config: Dict, checkpoint_dir=None):
     gamma = config.get("gammas")
     optimal_env_params = config.get("optimal_env_params")
 
-    seed = int(datetime.now().timestamp())
+    seed = 42
     #Set numpy random seed
     np.random.seed(seed)
 
@@ -95,8 +95,6 @@ if environment == 'Acrobot-v1' or environment == 'MountainCar-v0' or environment
 
 config.update(env_specific_config)
 
-print(config)
-
 # set `address=None` to train on laptop
 ray.init(address=None)
 
@@ -114,7 +112,7 @@ analysis = tune.run(
     verbose=False,
     metric="mean_reward",
     mode="max",
-    num_samples=2,
+    num_samples=10,
 
     # a directory where results are stored before being
     # sync'd to head node/cloud storage

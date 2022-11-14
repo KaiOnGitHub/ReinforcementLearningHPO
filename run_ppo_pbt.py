@@ -33,7 +33,7 @@ def run_ppo(config: Dict, checkpoint_dir=None):
     clip = config.get("clips")
     optimal_env_params = config.get("optimal_env_params")
 
-    seed = int(datetime.now().timestamp())
+    seed = 42
     #Set numpy random seed
     np.random.seed(seed)
 
@@ -140,7 +140,7 @@ analysis = tune.run(
     verbose=False,
     metric="mean_reward",
     mode="max",
-    num_samples=2,
+    num_samples=10,
     stop=TimeStopper(),
 
     # a directory where results are stored before being

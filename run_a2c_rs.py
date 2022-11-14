@@ -79,7 +79,6 @@ def run_a2c(learning_rate: float, gamma: float, environment: str):
     os.makedirs(eval_dir, exist_ok=True)
 
     # Create and wrap the environment
-    env = make_vec_env(environment, n_envs=16)
     env = gym.make(environment)
     env = Monitor(env, monitor_dir)
 
@@ -122,7 +121,7 @@ else:
 
 print("ENV: "+ environment)
 
-seed = int(datetime.now().timestamp())
+seed = 42
 #Set numpy random seed
 np.random.seed(seed)
 learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))
