@@ -55,6 +55,7 @@ def run_dqn(config: Dict, checkpoint_dir=None):
         path = os.path.join(checkpoint_dir, "checkpoint")
         iteration_file_path = os.path.join(checkpoint_dir, "training_iteration_checkpoint")
 
+        print("Loading from checkpoint.")
         model = DQN.load(path, env)
 
         with open (iteration_file_path, "rb") as f:
@@ -65,6 +66,7 @@ def run_dqn(config: Dict, checkpoint_dir=None):
     timesteps = 10
     rewards = []
     for i in range(current_iteration+1, timesteps+1):
+        print(f"iteration {i} of {timesteps}")
         total_timesteps = int(1e4)
         model.learn(total_timesteps)
         # Returns average and standard deviation of the return from the evaluation
@@ -80,7 +82,6 @@ def run_dqn(config: Dict, checkpoint_dir=None):
             model.save(path)
 
             with open (iteration_file_path, "wb") as f:
-                
                 pickle.dump(i, f)
 
 
@@ -96,7 +97,7 @@ if args.environment:
 else:
     environment = 'Acrobot-v1'
 
-print("ENV: "+ environment)
+print("Running training for environment: "+ environment)
 
 scheduler = PopulationBasedTraining(
         time_attr="training_iteration",
@@ -119,7 +120,6 @@ config = {
 # set `address=None` to train on laptop
 ray.init(address=None)
 
-print("dqn-pbt-tune_"+environment)
 # use local_mode to run in one process (enables debugging in IDE)
 # ray.init(address=None,local_mode=True)
 

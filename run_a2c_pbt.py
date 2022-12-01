@@ -85,8 +85,6 @@ def run_a2c(config: Dict, checkpoint_dir=None):
                 
                 pickle.dump(i, f)
 
-            
-
         tune.report(mean_reward=mean_reward, training_iteration=i)
 
 parser = argparse.ArgumentParser("python run_a2c_pbt.py")
@@ -98,7 +96,7 @@ if args.environment:
 else:
     environment = 'Acrobot-v1'
 
-print("ENV: "+ environment)
+print("Running training for environment: "+ environment)
 
 scheduler = PopulationBasedTraining(
         time_attr="training_iteration",

@@ -98,7 +98,7 @@ if args.environment:
 else:
     environment = 'Acrobot-v1'
 
-print("ENV: "+ environment)
+print("Running training for environment: "+ environment)
 
 scheduler = PopulationBasedTraining(
         time_attr="training_iteration",
@@ -143,7 +143,6 @@ config.update(env_specific_config)
 # set `address=None` to train on laptop
 ray.init(address=None)
 
-print("ppo-pbt-tune_"+environment)
 # use local_mode to run in one process (enables debugging in IDE)
 # ray.init(address=None,local_mode=True)
 
