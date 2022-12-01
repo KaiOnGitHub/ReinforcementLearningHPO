@@ -20,7 +20,7 @@ __license__ = "3-clause BSD"
 
 SEED = 42
 
-
+# Because we use parameter noise, we should use a MlpPolicy with layer normalization
 def run_a2c(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPolicy'
             , budget: int = 1):
     
@@ -50,8 +50,6 @@ def run_a2c(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
         # Create and wrap the environment
         env = gym.make(environment)
         env = Monitor(env, checkpoint_dir)
-        # Because we use parameter noise, we should use a MlpPolicy with layer normalization
-
         optimal_env_params = dict()
 
 
@@ -144,7 +142,7 @@ if __name__ == "__main__":
     # def_value = tae.run(
         # config=cs.get_default_configuration(),
         # budget=max_iterations, seed=42
-#    )[1]
+    #    )[1]
 
     #print("Value for default configuration: %.4f" % def_value)
 
@@ -154,6 +152,6 @@ if __name__ == "__main__":
     finally:
         incumbent = smac.solver.incumbent
 
-    # inc_value = tae.run(config=incumbent, budget=max_iterations, seed=42)[1]
+    # inc_value = tae.run(config=incumbent, budget=max_iterations, seed=SEED)[1]
     # print("Value for inc configuration: %.4f" % inc_value)
 

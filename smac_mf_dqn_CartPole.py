@@ -21,6 +21,7 @@ __license__ = "3-clause BSD"
 
 SEED = 42
 
+# Because we use parameter noise, we should use a MlpPolicy with layer normalization
 def run_dqn(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPolicy'
             , budget: int = 1):
     
@@ -50,7 +51,6 @@ def run_dqn(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
         # Create and wrap the environment
         env = gym.make(environment)
         env = Monitor(env, checkpoint_dir)
-        # Because we use parameter noise, we should use a MlpPolicy with layer normalization
 
         if (environment == 'CartPole-v1'):
             optimal_env_params = dict(
