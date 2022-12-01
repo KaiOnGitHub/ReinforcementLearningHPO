@@ -1,24 +1,18 @@
 from datetime import datetime
 import logging
 import math
-
 logging.basicConfig(level=logging.INFO)
-
 import warnings
 import numpy as np
-
 import ConfigSpace as CS
 from ConfigSpace.hyperparameters import (
     CategoricalHyperparameter,
     UniformFloatHyperparameter,
     UniformIntegerHyperparameter,
 )
-
 import gym
 from stable_baselines3 import A2C
 from stable_baselines3.common.evaluation import evaluate_policy
-
-
 import os
 import sys
 import gym
@@ -44,9 +38,7 @@ SEED = 42
 
 
 def run_a2c(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPolicy'
-            , budget: int = 1, seed: int = 42):
-
-    seed = 42
+            , budget: int = 1):
     
     learning_rate = config["learning_rate"]
     gamma = config["gamma"]
@@ -64,7 +56,7 @@ def run_a2c(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
 
         model = A2C.load(path=path, env=env)
 
-        with open(os.path.join(checkpoint_dir, "a2c-smac_%s_lr_%s_gamma_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, seed)), 'r') as f:
+        with open(os.path.join(checkpoint_dir, "a2c-smac_%s_lr_%s_gamma_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, SEED)), 'r') as f:
             data = json.load(f)
             
         rewards = data["rewards"]
@@ -79,7 +71,7 @@ def run_a2c(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
         optimal_env_params = dict()
 
 
-        model = A2C(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=seed, **optimal_env_params)
+        model = A2C(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=SEED, **optimal_env_params)
         rewards = []
         std_rewards = []
     # Create the callback: check every 1000 steps
@@ -96,10 +88,10 @@ def run_a2c(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
             std_rewards.append(std_r)
     data = {"gamma": gamma, "learning_rate": learning_rate,
                          "rewards": rewards, "std_rewards": std_rewards}
-    with open(os.path.join(checkpoint_dir, "a2c-smac_%s_lr_%s_gamma_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, seed)), 'w+') as f:
+    with open(os.path.join(checkpoint_dir, "a2c-smac_%s_lr_%s_gamma_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, SEED)), 'w+') as f:
         json.dump(data, f)
     
-    with open(os.path.join(log_dir, "a2c-smac_%s_seed%s_eval.json" % (environment, seed)), 'a+') as f:
+    with open(os.path.join(log_dir, "a2c-smac_%s_seed%s_eval.json" % (environment, SEED)), 'a+') as f:
         json.dump(data, f)
         f.write("\n")
 
@@ -135,7 +127,7 @@ if __name__ == "__main__":
     scenario = Scenario(
         {
             "run_obj": "quality",  # we optimize quality (alternative to runtime)
-            "runcount-limit": 10, # number of configurations
+            "runcount-limit": 30, # number of configurations
             "cs": cs,  # configuration space
             "deterministic": True,
             # Uses pynisher to limit memory and runtime
@@ -151,7 +143,7 @@ if __name__ == "__main__":
     max_iterations = 10
 
     # Intensifier parameters
-    intensifier_kwargs = {"initial_budget": 1, "max_budget": max_iterations, "eta": 3}
+    intensifier_kwargs = {"initial_budget": 2, "max_budget": max_iterations, "eta": 2}
     # seed = int(sys.argv[1])
     # To optimize, we pass the function to the SMAC-object
     smac = SMAC4MF(

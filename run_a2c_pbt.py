@@ -14,7 +14,20 @@ from ray import tune
 from ray.tune.schedulers import PopulationBasedTraining
 from ray.tune import Stopper
 import argparse
+import pickle
 
+class CustomStopper(tune.Stopper):
+        def __init__(self):
+            self.should_stop = False
+
+        def __call__(self, trial_id, result):
+            max_iter = 10
+            return result["training_iteration"] >= max_iter
+
+        def stop_all(self):
+            return self.should_stop
+
+stopper = CustomStopper()
 
 def run_a2c(config: Dict, checkpoint_dir=None):
     environment = config.get("environment")
@@ -22,27 +35,37 @@ def run_a2c(config: Dict, checkpoint_dir=None):
     gamma = config.get("gammas")
     optimal_env_params = config.get("optimal_env_params")
 
-    seed = 42
+    SEED = 42
+    
     #Set numpy random seed
-    np.random.seed(seed)
+    np.random.seed(SEED)
 
     # Create and wrap the environment
     env = gym.make(environment)
     env = Monitor(env)
 
-    model = A2C('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=seed, **optimal_env_params)
+    model = A2C('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=SEED, **optimal_env_params)
 
+    current_iteration = 0   
+    
     # If checkpoint_dir is not None, then we are resuming from a checkpoint.
     if checkpoint_dir:
-        print("Loading from checkpoint.")
         path = os.path.join(checkpoint_dir, "checkpoint")
+        iteration_file_path = os.path.join(checkpoint_dir, "training_iteration_checkpoint")
+
+        print("Loading from checkpoint.")
         model = A2C.load(path, env)
+        
+        with open (iteration_file_path, "rb") as f:
+            current_iteration = pickle.load(f)
+            
 
 
     # Train the agent
     timesteps = 10
     rewards = []
-    for i in range(timesteps):
+
+    for i in range(current_iteration+1, timesteps+1):
         print(f"iteration {i} of {timesteps}")
         total_timesteps = int(1e4)
         model.learn(total_timesteps)
@@ -54,10 +77,17 @@ def run_a2c(config: Dict, checkpoint_dir=None):
 
         with tune.checkpoint_dir(i) as checkpoint_dir:
             path = os.path.join(checkpoint_dir, "checkpoint")
+            iteration_file_path = os.path.join(checkpoint_dir, "training_iteration_checkpoint")
+
             # TODO save model total timesteps and episodes total here ?
             model.save(path)
+            with open (iteration_file_path, "wb") as f:
+                
+                pickle.dump(i, f)
 
-        tune.report(mean_reward=mean_reward)
+            
+
+        tune.report(mean_reward=mean_reward, training_iteration=i)
 
 parser = argparse.ArgumentParser("python run_a2c_pbt.py")
 parser.add_argument("environment", help="The gym environment as string", type=str)
@@ -72,7 +102,7 @@ print("ENV: "+ environment)
 
 scheduler = PopulationBasedTraining(
         time_attr="training_iteration",
-        perturbation_interval=10,
+        perturbation_interval=3,
         hyperparam_mutations={
             "lr": tune.uniform(lower=math.pow(10, -6), upper=math.pow(10, -2)),
             "gammas": tune.uniform(lower=0.8, upper=1.0),
@@ -110,6 +140,7 @@ analysis = tune.run(
     name="a2c-pbt-tune_"+environment,
     scheduler=scheduler,
     verbose=False,
+    stop=stopper,
     metric="mean_reward",
     mode="max",
     num_samples=10,

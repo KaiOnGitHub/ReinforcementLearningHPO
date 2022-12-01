@@ -14,17 +14,20 @@ from ray import tune
 from ray.tune.schedulers import PopulationBasedTraining
 from ray.tune import Stopper
 import argparse
+import pickle
 
-class TimeStopper(Stopper):
-    def __init__(self):
-        self._start = time.time()
-        self._deadline = 60*60*6 # 6 hours
+class CustomStopper(tune.Stopper):
+        def __init__(self):
+            self.should_stop = False
 
-    def __call__(self, trial_id, result):
-        return False
+        def __call__(self, trial_id, result):
+            max_iter = 10
+            return result["training_iteration"] >= max_iter
 
-    def stop_all(self):
-        return time.time() - self._start > self._deadline
+        def stop_all(self):
+            return self.should_stop
+
+stopper = CustomStopper()
 
 def run_ppo(config: Dict, checkpoint_dir=None):
     environment = config.get("environment")
@@ -33,28 +36,38 @@ def run_ppo(config: Dict, checkpoint_dir=None):
     clip = config.get("clips")
     optimal_env_params = config.get("optimal_env_params")
 
-    seed = 42
+    SEED = 42
+
     #Set numpy random seed
-    np.random.seed(seed)
+    np.random.seed(SEED)
 
     # Create and wrap the environment
     env = gym.make(environment)
     env = Monitor(env)
 
     model = PPO('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
-                clip_range=clip, seed=seed, **optimal_env_params)
+                clip_range=clip, seed=SEED, **optimal_env_params)
+
+    current_iteration = 0   
 
     # If checkpoint_dir is not None, then we are resuming from a checkpoint.
     if checkpoint_dir:
         print("Loading from checkpoint.")
         path = os.path.join(checkpoint_dir, "checkpoint")
+        iteration_file_path = os.path.join(checkpoint_dir, "training_iteration_checkpoint")
+
         model = PPO.load(path, env)
+
+        with open (iteration_file_path, "rb") as f:
+            current_iteration = pickle.load(f)
+            
+
 
 
     # Train the agent
     timesteps = 10
     rewards = []
-    for i in range(timesteps):
+    for i in range(current_iteration+1, timesteps+1):
         total_timesteps = int(1e4)
         model.learn(total_timesteps)
         # Returns average and standard deviation of the return from the evaluation
@@ -65,10 +78,16 @@ def run_ppo(config: Dict, checkpoint_dir=None):
 
         with tune.checkpoint_dir(i) as checkpoint_dir:
             path = os.path.join(checkpoint_dir, "checkpoint")
-            # TODO save model total timesteps and episodes total here ?
+            iteration_file_path = os.path.join(checkpoint_dir, "training_iteration_checkpoint")
+
             model.save(path)
 
-        tune.report(mean_reward=mean_reward)
+            with open (iteration_file_path, "wb") as f:
+                
+                pickle.dump(i, f)
+
+
+        tune.report(mean_reward=mean_reward, training_iteration=i)
 
 parser = argparse.ArgumentParser("python run_ppo_pbt.py")
 parser.add_argument("environment", help="The gym environment as string", type=str)
@@ -83,7 +102,7 @@ print("ENV: "+ environment)
 
 scheduler = PopulationBasedTraining(
         time_attr="training_iteration",
-        perturbation_interval=10,
+        perturbation_interval=3,
         hyperparam_mutations={
             "lr": tune.uniform(lower=math.pow(10, -6), upper=math.pow(10, -2)),
             "gammas": tune.uniform(lower=0.8, upper=1.0),
@@ -121,8 +140,6 @@ elif environment == 'CartPole-v1':
 
 config.update(env_specific_config)
 
-print(config)
-
 # set `address=None` to train on laptop
 ray.init(address=None)
 
@@ -141,7 +158,7 @@ analysis = tune.run(
     metric="mean_reward",
     mode="max",
     num_samples=10,
-    stop=TimeStopper(),
+    stop=stopper,
 
     # a directory where results are stored before being
     # sync'd to head node/cloud storage

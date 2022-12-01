@@ -43,105 +43,36 @@ __license__ = "3-clause BSD"
 
 SEED = 42
 
-class SaveOnBestTrainingRewardCallback(BaseCallback):
-    """
-    Callback for saving a model (the check is done every ``check_freq`` steps)
-    based on the training reward (in practice, we recommend using ``EvalCallback``).
-
-    :param check_freq:
-    :param log_dir: Path to the folder where the model will be saved.
-      It must contains the file created by the ``Monitor`` wrapper.
-    :param verbose: Verbosity level.
-    """
-    def __init__(self, check_freq: int, log_dir: str, verbose: int = 1, file: str = None,
-                 gamma: float = 0.99, lr: float = 1e-4, eps: float = 0.1, seed: int = 12345):
-        super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
-        self.check_freq = check_freq
-        self.log_dir = log_dir
-        self.save_path = os.path.join(log_dir, 'best_model')
-        self.best_mean_reward = -np.inf
-        self.file = file
-        self.gamma = gamma
-        self.lr = lr
-        self.eps = eps
-        self.seed = seed
-
-    def _init_callback(self) -> None:
-        # Create folder if needed
-        if self.save_path is not None:
-            os.makedirs(self.save_path, exist_ok=True)
-
-    def _on_step(self) -> bool:
-        if self.n_calls % self.check_freq == 0:
-
-          # Retrieve training reward
-          x, y = ts2xy(load_results(self.log_dir), 'timesteps')
-          if len(x) > 0:
-              # Mean training reward over the last 100 episodes
-              mean_reward = np.mean(y[-100:])
-              # if self.verbose > 0:
-              #   print(f"Num timesteps: {self.num_timesteps}")
-              #   print(f"Best mean reward: {self.best_mean_reward:.2f} - Last mean reward per episode: {mean_reward:.2f}")
-
-              # New best model, you could save the agent here
-              if mean_reward > self.best_mean_reward:
-                  self.best_mean_reward = mean_reward
-              #     # Example for saving best model
-              #     if self.verbose > 0:
-              #       print(f"Saving new best model to {self.save_path}")
-              #     self.model.save(self.save_path)
-
-        return True
-
-    def _on_training_end(self) -> None:
-        """
-        This event is triggered before exiting the `learn()` method.
-        """
-        # Retrieve training reward
-        x, y = ts2xy(load_results(self.log_dir), 'timesteps')
-        if len(x) > 0:
-              # Mean training reward over the last 100 episodes
-             mean_reward = np.mean(y[-100:])
-             data = {"gamma": self.gamma, "learning_rate": self.lr, "clip": self.eps,
-                     "rewards": list(y)}
-             with open("%s_seed%s.json" % (self.file, self.seed), 'w+') as f:
-                 json.dump(data, f)
-             for idx, re in enumerate(y):
-                 print("Episode %s: %s" % (idx+1, re))
-             if self.verbose > 0:
-                print(f"Num timesteps: {self.num_timesteps}")
-                print(f"Best mean reward: {self.best_mean_reward:.2f} - Last mean reward per episode: {mean_reward:.2f}")
-
-        return True
-
-
-
 
 def run_ppo(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPolicy'
-            , budget: int = 1, seed: int = 1):
+            , budget: int = 1):
+
     learning_rate = config["learning_rate"]
     gamma = config["gamma"]
     clip = config["clip"]
     # Create log dir if it doesn't exist
-    log_dir = "ppo-smac_%s/%s_%s_%s_%s/" % (environment, learning_rate, gamma, clip, seed)
+    log_dir = "ppo-smac_%s/" % (environment)
+    os.makedirs(log_dir, exist_ok=True)
+    checkpoint_dir = os.path.join(log_dir, "checkpoint_lr_%s_gamma_%s_clip_%s" % (learning_rate, gamma, clip))
 
-    if os.path.exists(log_dir):
+    if os.path.exists(checkpoint_dir):
         # Create and wrap the environment
         env = gym.make(environment)
-        env = Monitor(env, log_dir)
-        model = PPO.load(path=os.path.join(log_dir, "checkpoint"), env=env)
-        # model.gamma = gamma
-        # model.learning_rate = learning_rate
-        # model.clip_range = clip
-        with open(os.path.join(log_dir, "%s_PPO_random_lr_%s_gamma_%s_eps_%s_seed%s_eval.json" % (environment, learning_rate, gamma, clip, seed)), 'r') as f:
+        env = Monitor(env, checkpoint_dir)
+        path = os.path.join(checkpoint_dir, "checkpoint_lr_%s_gamma_%s_clip_%s" % (learning_rate, gamma, clip))
+
+        model = PPO.load(path=path, env=env)
+
+        with open(os.path.join(checkpoint_dir, "ppo-smac_%s_lr_%s_gamma_%s_eps_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, clip, SEED)), 'r') as f:
             data = json.load(f)
+
         rewards = data["rewards"]
         std_rewards = data["std_rewards"]
     else:
-        os.makedirs(log_dir, exist_ok=True)
+        os.makedirs(checkpoint_dir, exist_ok=True)
         # Create and wrap the environment
         env = gym.make(environment)
-        env = Monitor(env, log_dir)
+        env = Monitor(env, checkpoint_dir)
         # Because we use parameter noise, we should use a MlpPolicy with layer normalization
 
 
@@ -170,16 +101,17 @@ def run_ppo(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
             )
 
         model = PPO(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma,
-                clip_range=clip, seed=seed, **optimal_env_params)
+                clip_range=clip, seed=SEED, **optimal_env_params)
 
         rewards = []
         std_rewards = []
     # Create the callback: check every 1000 steps
-    # callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, seed=seed)
+    # callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=log_dir, SEED=SEED)
     # Train the agent
     timesteps = budget - len(rewards)
     if len(rewards) < budget:
         for i in range(int(timesteps)):
+            print (f"training loop {i} of {timesteps}")
             model.learn(total_timesteps=int(1e4), callback=None)
             # Returns average and standard deviation of the return from the evaluation
             r, std_r = evaluate_policy(model=model, env=env)
@@ -187,10 +119,17 @@ def run_ppo(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
             std_rewards.append(std_r)
     data = {"gamma": gamma, "learning_rate": learning_rate, "epsilon": clip,
                          "rewards": rewards, "std_rewards": std_rewards}
-    with open(os.path.join(log_dir,  "%s_PPO_random_lr_%s_gamma_%s_eps_%s_seed%s_eval.json" % (environment, learning_rate, gamma, clip, seed)),
+    
+    with open(os.path.join(checkpoint_dir, "ppo-smac_%s_lr_%s_gamma_%s_eps_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, clip, SEED)),
               'w+') as f:
         json.dump(data, f)
-    path = os.path.join(log_dir, "checkpoint")
+
+    with open(os.path.join(log_dir, "ppo-smac_%s_seed_%s_eval.json" % (environment, SEED)), "a+") as f:
+        json.dump(data, f)
+        f.write("\n")
+
+    path = os.path.join(checkpoint_dir, "checkpoint_lr_%s_gamma_%s_clip_%s" % (learning_rate, gamma, clip))
+
     # Save state to checkpoint file.
     # No need to save optimizer for SGD.
     model.save(path=path)
@@ -225,7 +164,7 @@ if __name__ == "__main__":
     scenario = Scenario(
         {
             "run_obj": "quality",  # we optimize quality (alternative to runtime)
-            "runcount-limit": 10, # number of configurations
+            "runcount-limit": 30, # number of configurations
             "cs": cs,  # configuration space
             "deterministic": True,
             # Uses pynisher to limit memory and runtime
@@ -241,8 +180,8 @@ if __name__ == "__main__":
     max_iterations = 10
 
     # Intensifier parameters
-    intensifier_kwargs = {"initial_budget": 1, "max_budget": max_iterations, "eta": 5}
-    # seed = int(sys.argv[1])
+    intensifier_kwargs = {"initial_budget": 2, "max_budget": max_iterations, "eta": 2}
+    # SEED = int(sys.argv[1])
     # To optimize, we pass the function to the SMAC-object
     smac = SMAC4MF(
         scenario=scenario,
@@ -257,7 +196,7 @@ if __name__ == "__main__":
     # It returns: Status, Cost, Runtime, Additional Infos
     # def_value = tae.run(
         # config=cs.get_default_configuration(),
-        # budget=max_iterations, seed=12345
+        # budget=max_iterations, SEED=42
 #    )[1]
 
     #print("Value for default configuration: %.4f" % def_value)
@@ -268,6 +207,6 @@ if __name__ == "__main__":
     finally:
         incumbent = smac.solver.incumbent
 
-    inc_value = tae.run(config=incumbent, budget=max_iterations, seed=12345)[1]
+    inc_value = tae.run(config=incumbent, budget=max_iterations, seed=SEED)[1]
     print("Value for inc configuration: %.4f" % inc_value)
 

@@ -16,6 +16,7 @@ from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.callbacks import BaseCallback
 import argparse
 
+SEED = 42
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
@@ -27,13 +28,12 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
       It must contains the file created by the ``Monitor`` wrapper.
     :param verbose: Verbosity level.
     """
-    def __init__(self, check_freq: int, log_dir: str, verbose: int = 1, seed: int = 12345):
+    def __init__(self, check_freq: int, log_dir: str, verbose: int = 1):
         super(SaveOnBestTrainingRewardCallback, self).__init__(verbose)
         self.check_freq = check_freq
         self.log_dir = log_dir
         self.save_path = os.path.join(log_dir, 'best_model')
         self.best_mean_reward = -np.inf
-        self.seed = seed
 
     def _init_callback(self) -> None:
         # Create folder if needed
@@ -72,10 +72,9 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
 
 def run_ppo(learning_rate: float, gamma: float, clip: float, environment: str):
-    seed = 67890
     # Create log dir
-    working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/ppo-rs_%s/%s_%s_%s/' % (environment, learning_rate, gamma, clip)
-    monitor_dir = working_dir+"monitor"
+    working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/ppo-rs_%s/' % (environment)
+    monitor_dir = working_dir+"monitor_"+str(learning_rate)+"_"+str(gamma)+"_"+str(clip)
     eval_dir = working_dir+"evaluation"
 
     os.makedirs(working_dir, exist_ok=True)
@@ -110,9 +109,9 @@ def run_ppo(learning_rate: float, gamma: float, clip: float, environment: str):
 
     # Because we use parameter noise, we should use a MlpPolicy with layer normalization
     model = PPO('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma,
-                clip_range=clip, seed=seed, **optimal_env_params)
+                clip_range=clip, seed=SEED, **optimal_env_params)
     # Create the callback: check every 1000 steps
-    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=monitor_dir, seed=seed)
+    callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=monitor_dir)
     rewards = []
     std_rewards = []
     # Train the agent
@@ -125,9 +124,10 @@ def run_ppo(learning_rate: float, gamma: float, clip: float, environment: str):
         std_rewards.append(std_r)
     data = {"gamma": gamma, "learning_rate": learning_rate, "clip": clip,
                          "rewards": rewards, "std_rewards": std_rewards}
-    with open("%s/%s_PPO_random_lr_%s_gamma_%s_clip_%s_seed%s_eval.json" % (eval_dir, environment, learning_rate, gamma, clip, seed),
-              'w+') as f:
+    with open("%s/ppo-rs_%s_seed%s_eval.json" % (eval_dir, environment, SEED),
+              'a+') as f:
         json.dump(data, f)
+        f.write("\n")
     return rewards, std_rewards
 
 parser = argparse.ArgumentParser("python run_ppo_rs.py")
@@ -143,7 +143,7 @@ print("ENV: "+ environment)
 
 n_configs = 10
 #Set numpy random seed
-np.random.seed(42)
+np.random.seed(SEED)
 learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))
 gammas = np.random.uniform(low=0.8, high=1, size=n_configs)
 clips = np.random.uniform(low=0.05, high=0.3, size=n_configs)
