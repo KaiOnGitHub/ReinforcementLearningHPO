@@ -1,14 +1,14 @@
-from datetime import datetime
-from stable_baselines3 import DQN
-from stable_baselines3.common.evaluation import evaluate_policy
+import argparse
+import json
 import os
+
 import gym
 import numpy as np
-import json
+from stable_baselines3 import DQN
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
-from stable_baselines3.common.callbacks import BaseCallback
-import argparse
 
 SEED = 42
 
@@ -141,7 +141,7 @@ if args.environment:
 else:
     environment = 'Acrobot-v1'
 
-print("ENV: "+ environment)
+print("Running training for environment: "+ environment)
 
 n_configs = 10
 #Set numpy random seed

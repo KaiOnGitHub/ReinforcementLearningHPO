@@ -1,20 +1,15 @@
-from datetime import datetime
-import gym
-from stable_baselines3 import PPO
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.env_util import make_vec_env
+import argparse
+import json
 import os
+
 import gym
 import numpy as np
-import matplotlib.pyplot as plt
-import json
-from stable_baselines3 import TD3
-from stable_baselines3.common import results_plotter
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results
-from stable_baselines3.common.noise import NormalActionNoise
+from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
-import argparse
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.results_plotter import (load_results,
+                                                      ts2xy)
 
 SEED = 42
 
@@ -139,7 +134,7 @@ if args.environment:
 else:
     environment = 'Acrobot-v1'
 
-print("ENV: "+ environment)
+print("Running training for environment: "+ environment)
 
 n_configs = 10
 #Set numpy random seed

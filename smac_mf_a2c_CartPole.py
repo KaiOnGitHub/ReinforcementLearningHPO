@@ -1,35 +1,19 @@
-from datetime import datetime
 import logging
 import math
+
 logging.basicConfig(level=logging.INFO)
-import warnings
-import numpy as np
-import ConfigSpace as CS
-from ConfigSpace.hyperparameters import (
-    CategoricalHyperparameter,
-    UniformFloatHyperparameter,
-    UniformIntegerHyperparameter,
-)
-import gym
-from stable_baselines3 import A2C
-from stable_baselines3.common.evaluation import evaluate_policy
-import os
-import sys
-import gym
-import numpy as np
-import matplotlib.pyplot as plt
 import json
-from stable_baselines3 import TD3
-from stable_baselines3.common import results_plotter
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results
-from stable_baselines3.common.noise import NormalActionNoise
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.env_util import make_atari_env
-from stable_baselines3.common.vec_env import VecFrameStack
+import os
+
+import gym
+import numpy as np
+from ConfigSpace.hyperparameters import (UniformFloatHyperparameter)
 from smac.configspace import ConfigurationSpace
 from smac.facade.smac_mf_facade import SMAC4MF
 from smac.scenario.scenario import Scenario
+from stable_baselines3 import A2C
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.monitor import Monitor
 
 __copyright__ = "Copyright 2021, AutoML.org Freiburg-Hannover"
 __license__ = "3-clause BSD"

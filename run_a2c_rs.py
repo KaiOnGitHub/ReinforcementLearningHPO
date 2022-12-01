@@ -1,15 +1,14 @@
-from datetime import datetime
-from stable_baselines3 import A2C
-from stable_baselines3.common.evaluation import evaluate_policy
+import argparse
+import json
 import os
+
 import gym
 import numpy as np
-import json
+from stable_baselines3 import A2C
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.env_util import make_vec_env
-import argparse
 
 SEED = 42
 
@@ -82,7 +81,6 @@ def run_a2c(learning_rate: float, gamma: float, environment: str):
 
     # Because we use parameter noise, we should use a MlpPolicy with layer normalization
 
-
     # For Acrobot, Mountaincar and CartPole the same
     optimal_env_params = dict(
         ent_coef=.0
@@ -118,7 +116,7 @@ if args.environment:
 else:
     environment = 'Acrobot-v1'
 
-print("ENV: "+ environment)
+print("Running training for environment: "+ environment)
 
 #Set numpy random seed
 np.random.seed(SEED)
