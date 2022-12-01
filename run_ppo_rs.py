@@ -67,7 +67,7 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
 
 def run_ppo(learning_rate: float, gamma: float, clip: float, environment: str):
-    # Create log dir
+    # Create directories
     working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/ppo-rs_%s/' % (environment)
     monitor_dir = working_dir+"monitor_"+str(learning_rate)+"_"+str(gamma)+"_"+str(clip)
     eval_dir = working_dir+"evaluation"

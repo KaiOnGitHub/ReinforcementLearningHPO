@@ -79,13 +79,12 @@ def run_a2c(learning_rate: float, gamma: float, environment: str):
     env = gym.make(environment)
     env = Monitor(env, monitor_dir)
 
-    # Because we use parameter noise, we should use a MlpPolicy with layer normalization
-
     # For Acrobot, Mountaincar and CartPole the same
     optimal_env_params = dict(
         ent_coef=.0
     )
 
+    # Because we use parameter noise, we should use a MlpPolicy with layer normalization
     model = A2C('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=SEED, **optimal_env_params)
     # Create the callback: check every 1000 steps
     callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=monitor_dir)
