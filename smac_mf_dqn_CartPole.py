@@ -1,5 +1,6 @@
 import logging
 import math
+import pickle
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,7 +20,8 @@ from stable_baselines3.common.monitor import Monitor
 __copyright__ = "Copyright 2021, AutoML.org Freiburg-Hannover"
 __license__ = "3-clause BSD"
 
-SEED = 42
+SEED = 51513
+MAX_ITERATIONS = 100
 
 # Because we use parameter noise, we should use a MlpPolicy with layer normalization
 def run_dqn(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPolicy'
@@ -74,27 +76,45 @@ def run_dqn(config: dict, environment: str = 'CartPole-v1', policy: str = 'MlpPo
     if len(rewards) < budget:
         for i in range(int(timesteps)):
             print (f"training loop {i} of {timesteps}")
+
+            total_iteration_count = 0
+            
+            total_iteration_count_path = os.path.join(log_dir, "total_iteration_count.json")
+            if os.path.exists(total_iteration_count_path):
+                with open (total_iteration_count_path, "rb") as f:
+                    total_iteration_count = pickle.load(f)
+                    print("total iteration count: ", total_iteration_count)     
+
+            if total_iteration_count >= MAX_ITERATIONS:
+                print("reached total iteration limit of "+str(total_iteration_count)+" !")
+                break
+
             model.learn(total_timesteps=int(1e4), callback=None)
             # Returns average and standard deviation of the return from the evaluation
             r, std_r = evaluate_policy(model=model, env=env)
             rewards.append(r)
             std_rewards.append(std_r)
-    data = {"gamma": gamma, "learning_rate": learning_rate, "epsilon": clip,
-                         "rewards": rewards, "std_rewards": std_rewards}
-    with open(os.path.join(checkpoint_dir, "dqn-smac_%s_lr_%s_gamma_%s_eps_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, clip, SEED)),
-              'w+') as f:
-        json.dump(data, f)
 
-    with open(os.path.join(log_dir, "dqn-smac_%s_seed%s_eval.json" % (environment, SEED)), 'a+') as f:
-        json.dump(data, f)
-        f.write("\n")
+            with open(total_iteration_count_path, 'wb') as f:
+                pickle.dump(total_iteration_count+1, f)
 
-    path = os.path.join(checkpoint_dir, "checkpoint_lr_%s_gamma_%s_clip_%s" % (learning_rate, gamma, clip))
+    if len(rewards) > 0:
+        data = {"gamma": gamma, "learning_rate": learning_rate, "epsilon": clip,
+                            "rewards": rewards, "std_rewards": std_rewards}
+        with open(os.path.join(checkpoint_dir, "dqn-smac_%s_lr_%s_gamma_%s_eps_%s_seed%s_model-valuation.json" % (environment, learning_rate, gamma, clip, SEED)),
+                'w+') as f:
+            json.dump(data, f)
 
-    # Save state to checkpoint file.
-    # No need to save optimizer for SGD.
-    model.save(path=path)
-    return -1 * np.amax(rewards)
+        with open(os.path.join(log_dir, "dqn-smac_%s_seed%s_eval.json" % (environment, SEED)), 'a+') as f:
+            json.dump(data, f)
+            f.write("\n")
+
+        path = os.path.join(checkpoint_dir, "checkpoint_lr_%s_gamma_%s_clip_%s" % (learning_rate, gamma, clip))
+
+        # Save state to checkpoint file.
+        # No need to save optimizer for SGD.
+        model.save(path=path)
+        return -1 * np.amax(rewards)
 
 
 if __name__ == "__main__":
@@ -168,6 +188,6 @@ if __name__ == "__main__":
     finally:
         incumbent = smac.solver.incumbent
 
-    inc_value = tae.run(config=incumbent, budget=max_iterations, seed=SEED)[1]
-    print("Value for inc configuration: %.4f" % inc_value)
+    # inc_value = tae.run(config=incumbent, budget=max_iterations, seed=SEED)[1]
+    # print("Value for inc configuration: %.4f" % inc_value)
 
