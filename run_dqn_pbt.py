@@ -33,7 +33,7 @@ def run_dqn(config: Dict, checkpoint_dir=None):
     gamma = config.get("gammas")
     eps = config.get("epsilons")
 
-    SEED = 42
+    SEED = 51513
 
     #Set numpy random seed
     np.random.seed(SEED)

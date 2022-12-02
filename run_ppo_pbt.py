@@ -34,7 +34,7 @@ def run_ppo(config: Dict, checkpoint_dir=None):
     clip = config.get("clips")
     optimal_env_params = config.get("optimal_env_params")
 
-    SEED = 42
+    SEED = 51513
 
     #Set numpy random seed
     np.random.seed(SEED)

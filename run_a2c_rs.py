@@ -10,7 +10,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 
-SEED = 42
+SEED = 51513
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """

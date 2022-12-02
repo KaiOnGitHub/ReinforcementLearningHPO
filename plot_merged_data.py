@@ -4,6 +4,13 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
+mean = [np.mean([x,y]) for x,y in zip(data1,data2)]
+std = [np.std([x,y]) for x,y in zip(data1,data2)]
+
+print(mean)
+print(std)
+
+
 script_dir = os.path.dirname(os.path.realpath(__file__))
 plotting_dir = os.path.join(script_dir, "../plotting_data")
 
@@ -37,15 +44,7 @@ elif 'MountainCar-v0' in model:
 fig.suptitle(algorithm.upper())
 with open(os.path.join(plotting_dir, "%s" % (algorithm)), 'r') as f:
     lines = f.readlines()
-    
-    
-    data_to_be_plotted = {
-        "pbt": [],
-        "sma": [],
-        "rs_": [],
-    }
-
-    # first filter data
+        
     for line in lines:
         data = json.loads(line)
         search_method = ''
@@ -55,22 +54,6 @@ with open(os.path.join(plotting_dir, "%s" % (algorithm)), 'r') as f:
                 iterations_and_rewards = data[sm]
                 search_method = sm
 
-        data_to_be_plotted[search_method].append(iterations_and_rewards)
-
-    # calculate mean and std deviation of the filtered data of the 3 different seeds
-    for search_method, data in data_to_be_plotted.items():
-        
-        # check that we have the same amount of data points b4 computing mean
-        for data_length in [len(d[1]) for d in data]:
-            if data_length != len(data[0][1]):
-                raise RuntimeError("It looks like for different seeds we have different lengths of iterations")
-        
-        reward_arrays = [d[1] for d in data]
-        mean_reward_across_seeds = [round(np.mean([d1,d2,d3])) for d1,d2,d3 in zip(reward_arrays[0], reward_arrays[1], reward_arrays[2])]
-
-        # TODO What about smac iterations? Are they always the same length as well?
-        iterations = data[0][0]
-
         if search_method == 'pbt':
             label = 'PBT'
         elif search_method == 'sma':
@@ -78,24 +61,18 @@ with open(os.path.join(plotting_dir, "%s" % (algorithm)), 'r') as f:
         elif search_method == 'rs_':
             label = 'RS'
 
-        std_deviation_across_seeds = [round(np.std([d1,d2,d3])) for d1,d2,d3 in zip(reward_arrays[0], reward_arrays[1], reward_arrays[2])]
+        plt.plot(iterations_and_rewards[0], iterations_and_rewards[1], label=label)
+      
+        plt.legend(loc='best')
+        plt.xlabel("training iteration")
+        plt.ylabel("mean reward")
 
-        plt.plot(iterations, mean_reward_across_seeds, label=label)
-        plt.fill_between(iterations, 
-            np.add(mean_reward_across_seeds, std_deviation_across_seeds), 
-            np.subtract(mean_reward_across_seeds, std_deviation_across_seeds),
-            alpha=0.25)
-        
-    
-    plt.legend(loc='best')
-    plt.xlabel("training iteration")
-    plt.ylabel("mean reward")
     script_dir = os.path.dirname(os.path.realpath(__file__))
     plotting_files_dir = os.path.join(script_dir, "../plots_final")
 
     os.makedirs(plotting_files_dir, exist_ok=True)
     plt.savefig(os.path.join(plotting_files_dir, algorithm+'.jpg'))
 
-    plt.show()
+    # plt.show()
 
     

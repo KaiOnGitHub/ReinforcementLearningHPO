@@ -15,17 +15,18 @@ import re
 import sys
 
 # default model, if no model is passed as argument
-model = 'dqn-rs_Acrobot-v1'
 
-parser = argparse.ArgumentParser("python plot_results.py")
-parser.add_argument("model_dir_name", help="The directory name of the model to be plotted", type=str, nargs='?', default=model)
+parser = argparse.ArgumentParser("python collect_plotting_data.py")
+parser.add_argument("model_dir_name", help="The directory name of the model to be plotted", type=str, nargs='?')
+parser.add_argument("seed_dir_name", help="The directory name of the seed", type=str, nargs='?')
 args = parser.parse_args()
 
 if args.model_dir_name:
     model = args.model_dir_name
 
-# parent directory that contains all trained models
-model_directory = '/Users/kai/Documents/0_uni/Abschlussarbeiten/Bachelorprojekt/trained/'
+# parent directory that contains the training data to be collected
+model_directory = os.path.join("/Users/kai/Documents/0_uni/Abschlussarbeiten/Bachelorprojekt/trained_final/", args.seed_dir_name, args.model_dir_name)
+
 
 # one of the algorithms dqn, ppo or a2c
 algorithm = model[:3]
@@ -39,7 +40,7 @@ data_to_be_plotted = []
 smac_iterations = []
 
 # walk through all trained model directories and plot the results of the one passed as argument
-for subdir, dirs, files in os.walk(model_directory + model):
+for subdir, dirs, files in os.walk(model_directory):
     for file in files:
 
         # PBT: Find best model
@@ -86,14 +87,18 @@ for subdir, dirs, files in os.walk(model_directory + model):
                     for line in reversed(lines):
                         row = json.loads(line)
 
+                        rewards = row["rewards"]
+                        if len(rewards) < 1:
+                            continue
+
                         config = str(row["gamma"])+"_"+str(row["learning_rate"])
                         
                         if config in seen_configs:
                             continue
                             
                         seen_configs.append(config)
-                        final_rewards.insert(0, row["rewards"][-1])
-                        smac_iterations.insert(0, len(row["rewards"]))
+                        final_rewards.insert(0, rewards[-1])
+                        smac_iterations.insert(0, len(rewards))
 
             data_to_be_plotted.append(final_rewards)
 

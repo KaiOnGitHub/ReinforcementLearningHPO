@@ -23,7 +23,7 @@ from stable_baselines3.common.monitor import Monitor
 __copyright__ = "Copyright 2021, AutoML.org Freiburg-Hannover"
 __license__ = "3-clause BSD"
 
-SEED = 51513
+SEED = 99
 MAX_ITERATIONS_PER_LOOP = 10
 MAX_TOTAL_ITERATIONS = 100
 # we will cut of the # of configurations after MAX_TOTAL_ITERATIONS is reached
