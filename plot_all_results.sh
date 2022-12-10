@@ -6,7 +6,7 @@ cd ../trained_final
 
 rm -rf ../plotting_data
 
-declare -a seed_dirs=( "seed_42" "seed_99" "seed_51513")
+declare -a seed_dirs=( "seed_42" "seed_99" "seed_7")
 
 for seed_dir in "${seed_dirs[@]}"
 do

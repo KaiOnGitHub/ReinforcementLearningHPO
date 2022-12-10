@@ -3,6 +3,12 @@ import math
 import os
 import pickle
 from typing import Dict
+from training_base import get_pretuned_hyperparameters
+from training_base import create_model
+from training_base import get_parsed_arguments
+from training_base import create_configspace
+from training_base import N_CONFIGS
+from training_base import USE_PRETUNED_HYPERPARAMS
 
 import gym
 import numpy as np
@@ -10,9 +16,19 @@ import ray
 from ray import tune
 from ray.tune.schedulers import PopulationBasedTraining
 from stable_baselines3 import A2C
+from stable_baselines3 import DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 
+N_CONFIGS=N_CONFIGS
+
+algorithmString, algorithmClass, environment, seed = get_parsed_arguments()
+
+#Set numpy random seed
+np.random.seed(seed)
+
+print(f"Running PBT {algorithmString} {environment}")
 
 class CustomStopper(tune.Stopper):
         def __init__(self):
@@ -25,25 +41,20 @@ class CustomStopper(tune.Stopper):
         def stop_all(self):
             return self.should_stop
 
-stopper = CustomStopper()
-
-def run_a2c(config: Dict, checkpoint_dir=None):
+def run_algorithm(config: Dict, checkpoint_dir=None):
     environment = config.get("environment")
-    learning_rate = config.get("lr")
+    learning_rate = config.get("learning_rates")
     gamma = config.get("gammas")
+    clip = config.get("clips")
+    epsilon = config.get("epsilons")
     optimal_env_params = config.get("optimal_env_params")
-
-    SEED = 51513
-    
-    #Set numpy random seed
-    np.random.seed(SEED)
 
     # Create and wrap the environment
     env = gym.make(environment)
     env = Monitor(env)
 
-    model = A2C('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=SEED, **optimal_env_params)
-
+    model = create_model('MlpPolicy', env, learning_rate, gamma, clip, epsilon, optimal_env_params, algorithmString, seed)
+    
     current_iteration = 0   
     
     # If checkpoint_dir is not None, then we are resuming from a checkpoint.
@@ -52,12 +63,10 @@ def run_a2c(config: Dict, checkpoint_dir=None):
         iteration_file_path = os.path.join(checkpoint_dir, "training_iteration_checkpoint")
 
         print("Loading from checkpoint.")
-        model = A2C.load(path, env)
+        model = algorithmClass.load(path, env)
         
         with open (iteration_file_path, "rb") as f:
             current_iteration = pickle.load(f)
-            
-
 
     # Train the agent
     timesteps = 10
@@ -80,70 +89,48 @@ def run_a2c(config: Dict, checkpoint_dir=None):
             # TODO save model total timesteps and episodes total here ?
             model.save(path)
             with open (iteration_file_path, "wb") as f:
-                
                 pickle.dump(i, f)
 
         tune.report(mean_reward=mean_reward, training_iteration=i)
 
-parser = argparse.ArgumentParser("python run_a2c_pbt.py")
-parser.add_argument("environment", help="The gym environment as string", type=str)
-args = parser.parse_args()
-
-if args.environment:
-    environment = args.environment
-else:
-    environment = 'Acrobot-v1'
-
-print("Running training for environment: "+ environment)
-
 scheduler = PopulationBasedTraining(
         time_attr="training_iteration",
         perturbation_interval=3,
-        hyperparam_mutations={
-            "lr": tune.uniform(lower=math.pow(10, -6), upper=math.pow(10, -2)),
-            "gammas": tune.uniform(lower=0.8, upper=1.0),
-        },
+        hyperparam_mutations=create_configspace('PBT', algorithmString)
     )
 
-# use tune for hyperparameter selection
-config = {
-    "environment": environment,
-    "lr": tune.uniform(lower=math.pow(10, -6), upper=math.pow(10, -2)),
-    "gammas": tune.uniform(lower=0.8, upper=1.0),
-}
+# the second config is used for fixed hyperparams and the environment variable
+config = create_configspace('PBT', algorithmString)
+config.update({"environment": environment})
 
-if environment == 'Acrobot-v1' or environment == 'MountainCar-v0' or environment == 'CartPole-v1':
-    env_specific_config = {
-        "optimal_env_params": {
-            "ent_coef": 0.0,
-        }
-    }
-
-config.update(env_specific_config)
+if USE_PRETUNED_HYPERPARAMS:
+    config.update({"optimal_env_params": get_pretuned_hyperparameters(algorithmString, environment)})
 
 # set `address=None` to train on laptop
 ray.init(address=None)
 
-print("a2c-pbt-tune_"+environment)
 # use local_mode to run in one process (enables debugging in IDE)
 # ray.init(address=None,local_mode=True)
 
 # TODO: For syncing on cluster see: https://docs.ray.io/en/latest/tune/tutorials/tune-checkpoints.html
 sync_config = tune.SyncConfig()
 
+working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/seed_%s/' % (seed)
+os.makedirs(working_dir, exist_ok=True)
+
 analysis = tune.run(
-    run_a2c,
-    name="a2c-pbt-tune_"+environment,
+    run_algorithm,
+    name="%s-pbt-tune_%s" % (str.lower(algorithmString), environment),
     scheduler=scheduler,
     verbose=False,
-    stop=stopper,
+    stop=CustomStopper(),
     metric="mean_reward",
     mode="max",
     num_samples=10,
 
     # a directory where results are stored before being
     # sync'd to head node/cloud storage
-    local_dir=os.path.dirname(os.path.realpath(__file__))+'/../tmp',
+    local_dir=working_dir,
 
     # sync our checkpoints via rsync
     # you don't have to pass an empty sync config - but we
@@ -158,7 +145,6 @@ analysis = tune.run(
     # a very useful trick! this will resume from the last run specified by
     # sync_config (if one exists), otherwise it will start a new tuning run
     resume="AUTO",
-    
     config=config,
     )
 

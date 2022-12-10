@@ -5,25 +5,33 @@ cd "$parent_path"
 cd ../code
 
 training_files=(
+    "run_rs.py"
+    "run_pbt.py"
     # "run_a2c_pbt.py"
-    # "run_a2c_rs.py"
     # "run_dqn_pbt.py"
-    # "run_dqn_rs.py"
     # "run_ppo_pbt.py"
-    # "run_ppo_rs.py"
 )
 
 smac_training_files=(
-     #"smac_mf_a2c_Acrobot.py"
-     # "smac_mf_a2c_CartPole.py"
-     #"smac_mf_a2c_MountainCar.py"
-     #"smac_mf_dqn_Acrobot.py"
-     # "smac_mf_dqn_CartPole.py"
-     #"smac_mf_dqn_MountainCar.py"
-     #"smac_mf_ppo_Acrobot.py"
-     # "smac_mf_ppo_CartPole.py"
-     #"smac_mf_ppo_Mountaincar.py"
-     "smac_mf.py"
+    "run_smac_mf.py"
+)
+
+declare -a seeds=(
+    "42"
+    "99"
+    "7"
+)
+
+declare -a algorithms=(
+    "A2C"
+    "DQN"
+    "PPO"
+)
+
+declare -a envs=(
+    "CartPole-v1"
+    # "Acrobot-v1" 
+    # "MountainCar-v0"
 )
 
 containsElement () {
@@ -39,17 +47,31 @@ for f in * ;
     containsElement "$f" "${training_files[@]}"
     isTrainingFile=$?
         if ! [ $isTrainingFile == 1 ]; then
-            # python ../code/"$f" "Acrobot-v1" 
-            # python ../code/"$f" "MountainCar-v0"
-            python ../code/"$f" "CartPole-v1"
+            for seed in "${seeds[@]}"
+                do
+                    for algo in "${algorithms[@]}"
+                        do
+                            for env in "${envs[@]}"
+                                do
+                                    python ../code/"$f" $algo $env $seed
+                                done
+                        done
+                done
         fi
     
     containsElement "$f" "${smac_training_files[@]}"
     isSmacTrainingFile=$?
         if ! [ $isSmacTrainingFile == 1 ]; then
-            python ../code/"$f" "DQN" "CartPole-v1"
-            python ../code/"$f" "A2C" "CartPole-v1"
-            python ../code/"$f" "PPO" "CartPole-v1"
+            for seed in "${seeds[@]}"
+                do
+                    for algo in "${algorithms[@]}"
+                        do
+                            for env in "${envs[@]}"
+                                do
+                                    python ../code/"$f" $algo $env $seed
+                                done
+                        done
+                done
         fi
 
     done

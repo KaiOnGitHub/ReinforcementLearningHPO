@@ -2,6 +2,8 @@ import logging
 import math
 import pickle
 import argparse
+from training_base import get_pretuned_hyperparameters
+from training_base import create_model
 
 logging.basicConfig(level=logging.INFO)
 
@@ -23,7 +25,6 @@ from stable_baselines3.common.monitor import Monitor
 __copyright__ = "Copyright 2021, AutoML.org Freiburg-Hannover"
 __license__ = "3-clause BSD"
 
-SEED = 99
 MAX_ITERATIONS_PER_LOOP = 10
 MAX_TOTAL_ITERATIONS = 100
 # we will cut of the # of configurations after MAX_TOTAL_ITERATIONS is reached
@@ -41,6 +42,7 @@ environments = ["Acrobot-v1", "CartPole-v1", "MountainCar-v0"]
 parser = argparse.ArgumentParser("python smac_mf.py")
 parser.add_argument("algorithm", help="The search algorithm as string (A2C|DQN|PPO)", type=str)
 parser.add_argument("environment", help="The gym environment as string", type=str)
+parser.add_argument("seed", help="The random seed", type=int)
 args = parser.parse_args()
 
 if args.environment not in environments or args.algorithm not in list(algorithms.keys()):
@@ -52,6 +54,7 @@ if args.environment not in environments or args.algorithm not in list(algorithms
 algorithmString = args.algorithm
 algorithmClass = algorithms[algorithmString]
 environment = args.environment
+seed = args.seed
 
 def create_configspace_for_algorithm(algorithm: str) -> ConfigurationSpace:
     cs = ConfigurationSpace()
@@ -67,9 +70,10 @@ def create_configspace_for_algorithm(algorithm: str) -> ConfigurationSpace:
 
     if algorithm == 'DQN':
         params.append(UniformFloatHyperparameter(
-            "clip", 0.05, 0.3, default_value=0.2, log=False
+            "epsilon", 0.05, 0.3, default_value=0.2, log=False
         ))
-    elif algorithm == 'PPO':
+
+    elif algorithm =='PPO':
         params.append(UniformFloatHyperparameter(
             "clip", 0.05, 0.3, default_value=0.2, log=False
         ))
@@ -79,58 +83,6 @@ def create_configspace_for_algorithm(algorithm: str) -> ConfigurationSpace:
     
     return cs
 
-def create_model(policy, env, learning_rate, gamma, clip, optimal_env_params):
-    if algorithmString == 'DQN':
-        return DQN(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma,
-                    exploration_final_eps=clip, exploration_initial_eps=clip,
-                    exploration_fraction=1, seed=SEED, **optimal_env_params)
-    elif algorithmString == 'A2C':
-        return A2C(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=SEED, **optimal_env_params)
-    elif algorithmString == 'PPO':
-        return PPO(policy, env, verbose=0, learning_rate=learning_rate, gamma=gamma,
-                clip_range=clip, seed=SEED, **optimal_env_params)
-
-
-def get_pretuned_hyperparameters(algorithm: str, environment: str) -> dict:
-    if algorithm == 'DQN':
-        if (environment == 'CartPole-v1'):
-            return dict(
-                batch_size=64,
-                buffer_size=100000,
-                learning_starts=1000,
-                target_update_interval=10,
-                train_freq=256,
-                gradient_steps=128,
-                policy_kwargs=dict(net_arch=[256, 256]))
-    elif algorithm == 'A2C':
-        # nothing to improve for A2C
-        return dict()
-    elif algorithm == 'PPO':
-        if (environment == 'MountainCar-v0'):
-            return dict(
-                n_steps=16,
-                gae_lambda=0.98,
-                n_epochs=4,
-                ent_coef=0.0,
-            )
-        elif (environment == 'CartPole-v1'):
-            return dict(
-                n_steps=32,
-                batch_size=256,
-                gae_lambda=0.8,
-                n_epochs=20,
-                ent_coef=0.0,
-            )
-        elif (environment == 'Acrobot-v1'):
-            return dict(
-                n_steps=256,
-                batch_size=128,
-                gae_lambda=0.94,
-                n_epochs=4,
-                ent_coef=0.0,
-            )
-
-
 # Because we use parameter noise, we should use a MlpPolicy with layer normalization
 def run_algorithm(config: dict, environment: str = environment, policy: str = 'MlpPolicy'
             , budget: int = 1):
@@ -138,16 +90,17 @@ def run_algorithm(config: dict, environment: str = environment, policy: str = 'M
     hyperparams = dict(
         lr = config["learning_rate"],
         gamma = config["gamma"],
-        clip = config["clip"])
+        clip = config["clip"],
+        epsilon = config["epsilon"])
 
     # Create log dir if it doesn't exist
-    log_dir = "%s-smac_%s/" % (str.lower(algorithmString), environment)
+    log_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/seed_%s/%s-smac_%s/' % (seed, str.lower(algorithmString), environment)
     os.makedirs(log_dir, exist_ok=True)
 
     hyperparamsAsString = "_".join(f'{k}_{v}' for k, v in hyperparams.items() if v is not None)
 
     checkpoint_dir = os.path.join(log_dir, "checkpoint_"+hyperparamsAsString)
-    evaluation_dir = os.path.join(log_dir, "%s-smac_%s_seed%s_eval.json" % (str.lower(algorithmString), environment, SEED))
+    evaluation_dir = os.path.join(log_dir, "%s-smac_%s_seed%s_eval.json" % (str.lower(algorithmString), environment, seed))
     model_evaluation_dir = os.path.join(checkpoint_dir, "%s-smac_%s_model-valuation.json" % (str.lower(algorithmString), hyperparamsAsString))
     model_dir = os.path.join(checkpoint_dir, "checkpoint_"+hyperparamsAsString)
     
@@ -172,7 +125,7 @@ def run_algorithm(config: dict, environment: str = environment, policy: str = 'M
 
         optimal_env_params = get_pretuned_hyperparameters(algorithm=algorithmString, environment=environment)
 
-        model = create_model(policy, env, hyperparams["lr"], hyperparams["gamma"], hyperparams["clip"], optimal_env_params)
+        model = create_model(policy, env, hyperparams["lr"], hyperparams["gamma"], hyperparams["clip"], hyperparams["epsilon"], optimal_env_params, algorithmString, seed)
 
         rewards = []
         std_rewards = []
@@ -205,7 +158,7 @@ def run_algorithm(config: dict, environment: str = environment, policy: str = 'M
                 pickle.dump(total_iteration_count+1, f)
 
     if len(rewards) > 0:
-        data = {"gamma": hyperparams["gamma"], "learning_rate": hyperparams["lr"], "epsilon": hyperparams["clip"],
+        data = {"gamma": hyperparams["gamma"], "learning_rate": hyperparams["lr"], "clip": hyperparams["clip"], "epsilon": hyperparams["epsilon"],
                             "rewards": rewards, "std_rewards": std_rewards}
         with open(model_evaluation_dir, 'w+') as f:
             json.dump(data, f)
@@ -248,7 +201,7 @@ if __name__ == "__main__":
     # To optimize, we pass the function to the SMAC-object
     smac = SMAC4MF(
         scenario=scenario,
-        rng=np.random.RandomState(SEED),
+        rng=np.random.RandomState(seed),
         tae_runner=run_algorithm,
         intensifier_kwargs=intensifier_kwargs,
     )

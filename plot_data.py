@@ -66,7 +66,10 @@ with open(os.path.join(plotting_dir, "%s" % (algorithm)), 'r') as f:
                 raise RuntimeError("It looks like for different seeds we have different lengths of iterations")
         
         reward_arrays = [d[1] for d in data]
-        mean_reward_across_seeds = [round(np.mean([d1,d2,d3])) for d1,d2,d3 in zip(reward_arrays[0], reward_arrays[1], reward_arrays[2])]
+
+        mean_reward_across_seeds = np.mean([reward_arrays[0], reward_arrays[1], reward_arrays[2]], axis=0)
+        std_deviation_across_seeds = np.std([reward_arrays[0], reward_arrays[1], reward_arrays[2]], axis=0)
+        std_err = std_deviation_across_seeds / np.sqrt(3)
 
         # TODO What about smac iterations? Are they always the same length as well?
         iterations = data[0][0]
@@ -78,12 +81,10 @@ with open(os.path.join(plotting_dir, "%s" % (algorithm)), 'r') as f:
         elif search_method == 'rs_':
             label = 'RS'
 
-        std_deviation_across_seeds = [round(np.std([d1,d2,d3])) for d1,d2,d3 in zip(reward_arrays[0], reward_arrays[1], reward_arrays[2])]
-
         plt.plot(iterations, mean_reward_across_seeds, label=label)
         plt.fill_between(iterations, 
-            np.add(mean_reward_across_seeds, std_deviation_across_seeds), 
-            np.subtract(mean_reward_across_seeds, std_deviation_across_seeds),
+            np.add(mean_reward_across_seeds, std_err), 
+            np.subtract(mean_reward_across_seeds, std_err),
             alpha=0.25)
         
     

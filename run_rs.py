@@ -1,16 +1,50 @@
 import argparse
 import json
 import os
+from training_base import get_pretuned_hyperparameters
+from training_base import create_model
+from training_base import create_configspace
 
 import gym
 import numpy as np
 from stable_baselines3 import A2C
+from stable_baselines3 import DQN
+from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.results_plotter import load_results, ts2xy
 
-SEED = 51513
+N_CONFIGS=10
+
+algorithms = {
+    "A2C": A2C,
+    "DQN": DQN,
+    "PPO": PPO
+}
+environments = ["Acrobot-v1", "CartPole-v1", "MountainCar-v0"]
+
+parser = argparse.ArgumentParser("python run_rs.py")
+parser.add_argument("algorithm", help="The search algorithm as string (A2C|DQN|PPO)", type=str)
+parser.add_argument("environment", help="The gym environment as string", type=str)
+parser.add_argument("seed", help="The random seed", type=int)
+args = parser.parse_args()
+
+if args.environment not in environments or args.algorithm not in list(algorithms.keys()):
+    print(f"passed {args.algorithm} as algorithm and {args.environment} as environment")
+    print(f"allowed algorithms: {list(algorithms.keys())}")
+    print(f"allowed environments: {environments}")
+    raise ValueError("Did not pass the correct environment or algorithm as an argument.")
+
+algorithmString = args.algorithm
+algorithmClass = algorithms[algorithmString]
+environment = args.environment
+seed = args.seed
+
+print(f"Running Random Search {algorithmString} {environment}")
+
+#Set numpy random seed
+np.random.seed(seed)
 
 class SaveOnBestTrainingRewardCallback(BaseCallback):
     """
@@ -64,12 +98,14 @@ class SaveOnBestTrainingRewardCallback(BaseCallback):
 
         return True
 
-
-def run_a2c(learning_rate: float, gamma: float, environment: str):
+def run_algorithm(environment: str, learning_rate, gamma, clip, epsilon):
     # Create directories
-    working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/a2c-rs_%s/' % (environment)
-    monitor_dir = working_dir+"monitor_"+str(learning_rate)+"_"+str(gamma)
-    eval_dir = working_dir+"evaluation"
+    working_dir = os.path.dirname(os.path.realpath(__file__))+'/../tmp/seed_%s/%s-rs_%s/' % (seed, str.lower(algorithmString), environment)
+
+    hyperparamsAsString = "_".join(str(v) for v in [learning_rate, gamma, clip, epsilon] if v is not None)
+
+    monitor_dir = os.path.join(working_dir, "monitor_"+hyperparamsAsString)
+    eval_dir = os.path.join(working_dir,"evaluation")
 
     os.makedirs(working_dir, exist_ok=True)
     os.makedirs(monitor_dir, exist_ok=True)
@@ -80,12 +116,11 @@ def run_a2c(learning_rate: float, gamma: float, environment: str):
     env = Monitor(env, monitor_dir)
 
     # For Acrobot, Mountaincar and CartPole the same
-    optimal_env_params = dict(
-        ent_coef=.0
-    )
+    optimal_env_params = get_pretuned_hyperparameters(algorithmString, environment)   
 
     # Because we use parameter noise, we should use a MlpPolicy with layer normalization
-    model = A2C('MlpPolicy', env, verbose=0, learning_rate=learning_rate, gamma=gamma, seed=SEED, **optimal_env_params)
+    model = create_model('MlpPolicy', env, learning_rate, gamma, clip, epsilon, optimal_env_params, algorithmString, seed)
+
     # Create the callback: check every 1000 steps
     callback = SaveOnBestTrainingRewardCallback(check_freq=1000, log_dir=monitor_dir)
     rewards = []
@@ -98,29 +133,19 @@ def run_a2c(learning_rate: float, gamma: float, environment: str):
         r, std_r = evaluate_policy(model=model, env=env)
         rewards.append(r)
         std_rewards.append(std_r)
-    data = {"gamma": gamma, "learning_rate": learning_rate, "rewards": rewards, "std_rewards": std_rewards}
-    with open("%s/a2c-rs_%s_seed%s_eval.json" % (eval_dir, environment, SEED),
+    data = {"gamma": gamma, "learning_rate": learning_rate, "clip": clip, "epsilon": epsilon, "rewards": rewards, "std_rewards": std_rewards}
+    with open("%s/a2c-rs_%s_seed%s_eval.json" % (eval_dir, environment, seed),
               'a+') as f:
         json.dump(data, f)
         f.write("\n")
     return rewards, std_rewards
 
-n_configs = 10
-parser = argparse.ArgumentParser("python run_dqn_rs.py")
-parser.add_argument("environment", help="The gym environment as string", type=str)
-args = parser.parse_args()
+config = create_configspace('RS', algorithmString)
 
-if args.environment:
-    environment = args.environment
-else:
-    environment = 'Acrobot-v1'
+for i in range(0, N_CONFIGS):
+    learning_rate = config.get("learning_rates")[i] if "learning_rates" in config.keys() else None
+    gamma = config.get("gammas")[i] if "gammas" in config.keys() else None
+    clip = config.get("clips")[i] if "clips" in config.keys() else None
+    epsilon = config.get("epsilons")[i] if "epsilons" in config.keys() else None
 
-print("Running training for environment: "+ environment)
-
-#Set numpy random seed
-np.random.seed(SEED)
-learning_rates = np.power(10, np.random.uniform(low=-6, high=-2, size=n_configs))
-gammas = np.random.uniform(low=0.8, high=1, size=n_configs)
-
-for lr, gamma in zip(learning_rates, gammas):
-    r, std_r = run_a2c(learning_rate=lr, gamma=gamma, environment=environment)
+    r, std_r = run_algorithm(environment, learning_rate, gamma, clip, epsilon)
